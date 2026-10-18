@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $designRoot = Join-Path $projectRoot 'design'
-$assetRoot = Join-Path $projectRoot 'dist/assets'
+$assetRoot = Join-Path $projectRoot 'public/assets'
 $thumbnailRoot = Join-Path $designRoot '.thumbnails'
 [IO.Directory]::CreateDirectory($thumbnailRoot) | Out-Null
 $boardPath = Join-Path $designRoot 'juzi-design-board.svg'

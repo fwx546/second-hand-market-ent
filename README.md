@@ -1,54 +1,60 @@
-# 橘子集 · 校园闲置演示
+# 橘子集 · 西交利物浦大学校园二手交易平台
 
-面向西交利物浦大学的校园二手交易网页，覆盖 SIP 校区和太仓校区，主要展示小电器、电瓶车与生活用品。包含首页、商品详情、发布商品和个人中心，并适配桌面与手机。
+面向西交利物浦大学的 SIP 校区与太仓校区，交易类别为小电器、电瓶车和生活用品。保留原生 HTML/CSS/JavaScript 界面，使用 Sites 官方 Vinext 后端、D1 数据库和 R2 图片存储。首页、商品详情、发布与个人中心均适配桌面和手机。
 
-这是静态交互演示：商品、卖家、价格和联系方式均为虚构示例。用户先联系卖家，再约定线下面交；本版没有真实登录、聊天、支付、订单或共享后端。收藏、模拟发布和上传照片仅保存在当前浏览器的 IndexedDB 中，不会同步给其他同学；清除浏览器站点数据会丢失这些记录。
+这是数据库版：上架商品对访客公开，发布与收藏按登录账号保存，同一账号可跨浏览器、跨设备访问。平台使用 ChatGPT 登录，**不验证学校、学籍或校区身份**。卖家自行填写公开昵称和交易联系方式；平台不会把 ChatGPT 邮箱或全名自动作为卖家资料公开。登录用户可查看上架商品的联系方式，具体字段和下架效果见 [PRIVACY.md](PRIVACY.md)。
+
+交易仍通过卖家联系方式沟通和线下面交完成；当前没有站内私信、订单或支付功能。
 
 ## 本地启动
 
-需要 Node.js 22 或更高版本及随附的 npm；项目没有第三方运行依赖，无须执行 `npm install`。
+需要 **Node.js 22.13.0 或更高版本**及 npm。从仓库根目录运行：
 
 ```powershell
-git clone https://github.com/fwx546/second-hand-market-ent.git
-cd second-hand-market-ent
+npm ci
+npm run build
+npm run db:migrate
 npm run dev
 ```
 
-打开 <http://127.0.0.1:4173/>。请从仓库根目录运行命令，通过 HTTP 服务预览，不要直接双击 HTML 文件。按 `Ctrl+C` 停止服务。端口被占用时，可在 PowerShell 中先运行 `$env:JUZI_PORT = '4174'` 再启动。
+默认打开 <http://localhost:5173/>，按 `Ctrl+C` 停止。首次启动或新增迁移后，先构建，再迁移本地数据库。`npm run db:migrate` 只操作本地模拟数据库；正式迁移由 Sites 发布流程应用。
+
+portable 本地开发环境使用模拟账号 `local_seedy` / `seedy@sites.test`。它仅用于本地开发，不能作为正式 ChatGPT 登录已通过的证据。正式托管环境使用平台登录，不使用这组模拟身份。
+
+检查命令：
 
 ```powershell
+npm test
 npm run check
 ```
 
-检查后按 [QA.md](QA.md) 验证页面布局、搜索筛选、收藏、发布与下架；现有验收记录包含未完成的验证项，不代表未来修改自动通过。
+正式数据库初始为空，不预置旧版的 18 件虚构商品，也不导入用户浏览器原有的 IndexedDB 数据。首次看到空商品列表是正常状态。请用测试账号自行上传非私人照片，创建测试商品验证流程。
 
 ## 修改入口
 
-**`dist/` 是手写源码，也是发布目录，不是可以删除后重新生成的构建产物。** 当前无前端编译步骤，不要清理、覆盖或加入忽略列表。
-
-| 修改内容 | 文件或目录 |
+| 子系统 | 源码与职责 |
 | --- | --- |
-| 页面渲染、哈希路由、搜索筛选、发布和本地存储 | `dist/app.js` |
-| 桌面与手机布局、配色和样式 | `dist/styles.css` |
-| 示例商品、分类和卖家信息 | `dist/data.js` |
-| HTML 入口、标题和元信息 | `dist/index.html` |
-| 商品照片、插画及来源记录 | `dist/assets/` |
-| 可编辑 SVG 设计稿与生成说明 | `design/`、`scripts/design-export.mjs` |
-| 本地服务和自动检查 | `scripts/serve.mjs`、`scripts/check.mjs` |
-| 已有 Sites 项目关联 | `.openai/hosting.json` |
+| 原生界面 | `public/app.js`、`public/styles.css`；`public/data.js` 只保留分类等界面常量，不包含示例商品 |
+| HTML 入口 | `legacy/index.html`；根路由 `app/route.ts` 以 raw HTML 返回它 |
+| 交易接口 | `server/market.mjs` 与 `app/api/[[...path]]/route.ts`，处理身份、商品、收藏、联系方式和图片权限 |
+| 数据模型与迁移 | `db/schema.ts`、`drizzle/`；D1 存记录，R2 存照片内容 |
+| 托管关联 | `.openai/hosting.json`，使用已有项目及 `DB`、`BUCKET` 绑定 |
+| 设计交付 | `design/` 与设计生成脚本；`design/demo-data.js` 中的旧假商品只用于静态 SVG 生成 |
 
-仓库采用根目录单仓库结构。开发命令、相对路径和部署清单都以本目录为根；迁移备份不参与开发或部署。
+**`dist/` 已改为可重新生成的构建产物，不再是手写源码。** 请修改上表中的源文件，再运行构建；不要直接编辑 `dist/`。项目的开发命令、清单和相对路径均以仓库根目录为准。
+
+数据库变更先修改 schema，再运行 `npm run db:generate`，审查并提交新增迁移。迁移只定义结构，不夹带真实数据或演示商品；不得改写已应用的迁移。协作规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 设计与素材
 
-[在线 Figma 文件](https://www.figma.com/design/aj8JjrnlIaFq9QbDJWCq7r?node-id=202-697)包含八个原生 Frame 画板（四个页面各含桌面、手机版）和组件展示，文字与布局图形可独立编辑。尚未建立 Auto Layout 或原生组件实例；组件展示不等同于可复用的 Figma 组件库。详见 [design/README.md](design/README.md)。
+[在线 Figma 文件](https://www.figma.com/design/aj8JjrnlIaFq9QbDJWCq7r?node-id=202-697)保留桌面、手机画板与组件展示。Figma 与网站源码不会自动同步；修改界面后需单独更新设计稿。保留 Monito 参考模板的署名和修改说明，以及静态素材的作者、来源和许可记录。
 
-暖色电商视觉参考 Magenest 的 [Monito 模板](https://www.behance.net/gallery/155074809/FREE-TEMPLATE-eCommerce-Website-Monito-Pets-Store)，按设计来源记录保留 CC BY 4.0 署名及修改说明。商品图片的作者、来源和许可逐项记录于 [素材清单](dist/assets/SOURCES.md)。新增或替换素材时同步更新记录，不要将模板或照片来源视为本项目原创。
+`design/demo-data.js`、SVG 中的示例商品、昵称和联系号是设计用虚构数据，不是生产种子数据；不得将它们复制进 `public/`、迁移文件或正式数据库。
 
-SVG 生成脚本有独立的布局定义；修改网站的 HTML/CSS/JavaScript 不会自动同步 Figma 或 SVG 设计稿。
+## 部署与当前限制
 
-## 访问与部署
+当前已记录 15 项后端测试通过。真实本地 Vinext、D1/R2 的 HTTP 联测和浏览器 UI 验收需分别记录结果；浏览器文件选择器尚未成功调起，**不能把接口上传测试视为上传 UI 完整链路已经验收**。
 
-已有 Sites 网址：<https://juzi-campus-market.open-bloom-6517.chatgpt.site>。已记录部署成功及后台 `active/public` 状态，但当前测试网络触发 Cloudflare 拦截，公开访问阻断尚未解决，不能承诺所有访客均可打开。
+已有托管网址：<https://juzi-campus-market.open-bloom-6517.chatgpt.site>。旧静态版曾记录发布成功、后台 `active/public`，也曾遇到 Cloudflare 访问拦截。数据库版需要发布后重新验证，当前没有足够证据宣称新版已正式部署、公开访问或线上身份链路已验收；也不据旧拦截记录提前判定新版访问失败。本地模拟测试不能代替正式账号、D1 与 R2 的线上验证。
 
-**推送 GitHub 不会自动发布到 Sites。** 更新网站需要通过 Sites 插件发布到已有项目；普通静态托管则发布完整 `dist/` 内容。步骤及限制见 [DEPLOYMENT.md](DEPLOYMENT.md)，分支和 PR 协作方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+**GitHub push 或合并 PR 不会自动部署 Sites。** 数据库版需要通过 Sites 发布到已有项目，步骤和发布记录要求见 [DEPLOYMENT.md](DEPLOYMENT.md)。旧静态版的浏览器验收记录仅说明旧版本行为，不代表数据库版自动通过。

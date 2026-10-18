@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const source=fs.readFileSync(path.join(root,'dist/data.js'),'utf8');
+const source=fs.readFileSync(path.join(root,'design/demo-data.js'),'utf8');
 const {seedProducts:products,categories}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const out=path.join(root,'design');fs.mkdirSync(out,{recursive:true});
 const C={ink:'#382d25',muted:'#756b62',orange:'#ed592b',primary:'#cc451c',dark:'#bb3c18',soft:'#fff0e7',yellow:'#ffcc52',pale:'#fff1bc',cream:'#fbfaf6',white:'#ffffff',line:'#eee9e0',mint:'#e9f2dc',green:'#4b6846'};
@@ -14,8 +14,8 @@ function wrap(x,y,text,size,width,line=1.65,max=99,fill=C.ink,weight=400){let ro
 function line(x,y,w,color=C.line){parts.push(`<path d="M${x} ${y}h${w}" stroke="${color}"/>`);}
 function circle(x,y,rad,fill){parts.push(`<circle cx="${x}" cy="${y}" r="${rad}" fill="${fill}"/>`);}
 function group(id,fn){parts.push(`<g id="${id}"><title>${e(id)}</title>`);fn();parts.push('</g>');}
-function svgAsset(name,x,y,w,h){let s=fs.readFileSync(path.join(root,'dist/assets',name),'utf8');s=s.replace('<svg ',`<svg x="${x}" y="${y}" width="${w}" height="${h}" `);parts.push(s);}
-const photos=new Map();function photo(p,x,y,w,h,rx=10){const src=p.images[0];if(!photos.has(src))photos.set(src,'data:image/jpeg;base64,'+fs.readFileSync(path.join(root,'dist',src)).toString('base64'));let id='photo-'+(++uid);parts.push(`<defs><clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}"/></clipPath></defs><image x="${x}" y="${y}" width="${w}" height="${h}" xlink:href="${photos.get(src)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>`);}
+function svgAsset(name,x,y,w,h){let s=fs.readFileSync(path.join(root,'public/assets',name),'utf8');s=s.replace('<svg ',`<svg x="${x}" y="${y}" width="${w}" height="${h}" `);parts.push(s);}
+const photos=new Map();function photo(p,x,y,w,h,rx=10){const src=p.images[0];if(!photos.has(src))photos.set(src,'data:image/jpeg;base64,'+fs.readFileSync(path.join(root,'public',src)).toString('base64'));let id='photo-'+(++uid);parts.push(`<defs><clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}"/></clipPath></defs><image x="${x}" y="${y}" width="${w}" height="${h}" xlink:href="${photos.get(src)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>`);}
 const iconPaths={heart:'M20.8 4.7a5.4 5.4 0 0 0-7.7 0L12 5.8l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 21l8.8-8.6a5.4 5.4 0 0 0 0-7.7Z',arrow:'M4 12h16m-6-6 6 6-6 6',plus:'M12 5v14M5 12h14',search:'M16 16l5 5M18 10a8 8 0 1 1-16 0a8 8 0 1 1 16 0',home:'m3 10 9-7 9 7v11h-6v-7H9v7H3Z',user:'M16 8a4 4 0 1 1-8 0a4 4 0 1 1 8 0M4 22v-2a8 8 0 0 1 16 0v2',pin:'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0ZM14.5 10a2.5 2.5 0 1 1-5 0a2.5 2.5 0 1 1 5 0',upload:'M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6',fan:'M19 9a7 7 0 1 1-14 0a7 7 0 1 1 14 0M12 16v5M7 22h10M12 8c-7-5-6 5-1 2m2-1c7-5-4-7-2-1m1 2c0 8 8 0 1-1',bike:'M9 17a4 4 0 1 1-8 0a4 4 0 1 1 8 0M23 17a4 4 0 1 1-8 0a4 4 0 1 1 8 0M5 17l5-10h5l4 10M8 12h9M8 7H5m7-4h5l2 4',cup:'M4 8h13v8a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5ZM17 8h2a3 3 0 0 1 0 6h-2M7 2v3m5-3v3',check:'m5 12 4 4L19 6'};
 function icon(name,x,y,s=20,color=C.muted){parts.push(`<svg x="${x}" y="${y}" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${iconPaths[name]||iconPaths.arrow}"/></svg>`);}
 function button(x,y,w,label,primary=true,h=44,size=13){r(x,y,w,h,primary?C.primary:C.white,11,primary?'none':'#e6d6be');t(x+w/2,y+h/2+size*.36,label,size,primary?C.white:C.ink,700,'middle');}
