@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="390" height="2050" viewBox="0 0 390 2050"><title>03 发布商品 · 手机 390</title><desc>Editable vector interface design. Product photographs are embedded raster layers. Original Juzi Campus layout inspired by Monito; attribution in README.md.</desc>
+<rect x="0" y="0" width="390" height="2050" rx="0" fill="#fbfaf6" stroke="none"/>
+<g id="Header"><title>Header</title>
+<rect x="0" y="0" width="390" height="28" rx="0" fill="#fff8e7" stroke="none"/>
+<text x="18" y="19" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#947348" text-anchor="start">一点闲置，一点新的可能。</text>
+<rect x="0" y="28" width="390" height="112" rx="0" fill="#ffffff" stroke="none"/>
+<svg x="18" y="45" width="40" height="40" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M34 17c3-12 13-12 19-9-4 9-11 12-19 9Z" fill="#438962"/><path d="m32 21 2-13" stroke="#59412e" stroke-width="4" stroke-linecap="round"/><path d="M55 36c0 14-10 24-24 24S7 50 7 36s9-22 23-19c13-4 25 5 25 19Z" fill="#fa8135"/><path d="M16 31c1-5 5-8 9-9" fill="none" stroke="#ffb15a" stroke-width="4" stroke-linecap="round"/><ellipse cx="25" cy="37" rx="2" ry="3" fill="#563522"/><ellipse cx="40" cy="37" rx="2" ry="3" fill="#563522"/><path d="M28 44c3 3 7 3 10-1" fill="none" stroke="#563522" stroke-width="2.5" stroke-linecap="round"/></svg>
+
+<text x="66" y="66" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="25" font-weight="900" fill="#382d25" text-anchor="start">橘子集</text>
+<text x="67" y="82" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="8" font-weight="500" fill="#756b62" text-anchor="start">JUZI CAMPUS</text>
+<text x="260" y="58" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">西交利物浦大学</text>
+<text x="260" y="77" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="9" font-weight="400" fill="#756b62" text-anchor="start">全部校区 ⌄</text>
+<rect x="18" y="95" width="354" height="34" rx="10" fill="#f7f5ef" stroke="none"/>
+<svg x="29" y="104" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#756b62" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16l5 5M18 10a8 8 0 1 1-16 0a8 8 0 1 1 16 0"/></svg>
+<text x="53" y="117" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#aaa197" text-anchor="start">搜搜好物，让心动有回音</text>
+<text x="343" y="117" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="500" fill="#756b62" text-anchor="start">搜索</text>
+<path d="M0 140h390" stroke="#eee9e0"/>
+</g>
+<rect x="18" y="159" width="236" height="23" rx="5" fill="#fff0e7" stroke="none"/>
+<text x="26" y="175" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="500" fill="#bb3c18" text-anchor="start">PASS ON THE GOOD STUFF</text>
+<text x="18" y="217" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="26" font-weight="800" fill="#382d25" text-anchor="start">让闲置，遇见新同学 ✦</text>
+<text x="18" y="247" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="9" font-weight="400" fill="#756b62" text-anchor="start">拍张照片，写下它的故事。下一份心动，从这里开始。</text>
+<g id="Photo-upload"><title>Photo-upload</title>
+<rect x="18" y="276" width="354" height="377" rx="18" fill="#ffffff" stroke="#eee9e0"/>
+<text x="40" y="312" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="18" font-weight="800" fill="#382d25" text-anchor="start">给好物拍个照</text>
+<text x="350" y="312" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#756b62" text-anchor="end">最多 6 张</text>
+<rect x="40" y="337" width="310" height="190" rx="13" fill="#fffcf3" stroke="#ead5af"/>
+<svg x="177" y="370" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c7985b" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6"/></svg>
+<text x="195" y="439" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="14" font-weight="700" fill="#382d25" text-anchor="middle">点击选择商品照片</text>
+<text x="195" y="466" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#756b62" text-anchor="middle">第一张将成为封面，清晰实拍更加分</text>
+<text x="195" y="490" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="9" font-weight="400" fill="#756b62" text-anchor="middle">JPG / PNG / WebP，每张不超过 8 MB</text>
+<rect x="40" y="547" width="310" height="83" rx="12" fill="#fff8df" stroke="none"/>
+<text x="54" y="573" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="12" font-weight="700" fill="#9b7c43" text-anchor="start">🍊 橘子小贴士</text>
+<text x="54" y="599" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#9b7c43" text-anchor="start">找个亮一点的地方，拍下正面和细节。</text>
+<text x="54" y="619" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#9b7c43" text-anchor="start">小小的使用痕迹，也请诚实记录哦。</text>
+</g>
+<rect x="18" y="676" width="354" height="1177" rx="18" fill="#ffffff" stroke="#eee9e0"/>
+<text x="40" y="714" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="20" font-weight="800" fill="#382d25" text-anchor="start">说说这件好物</text>
+<text x="40" y="754" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">商品标题 *</text>
+<rect x="40" y="767" width="310" height="44" rx="10" fill="#ffffff" stroke="#e6dfd3"/>
+<text x="53" y="794" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">例如：陪我度过夏天的小风扇</text>
+<text x="40" y="837" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">好物分类 *</text>
+<rect x="40" y="850" width="310" height="44" rx="10" fill="#ffffff" stroke="#e6dfd3"/>
+<text x="53" y="877" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">小电器 ⌄</text>
+<text x="40" y="920" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">转让价格（元） *</text>
+<rect x="40" y="933" width="146" height="44" rx="10" fill="#ffffff" stroke="#e6dfd3"/>
+<text x="53" y="960" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">希望以多少转让？</text>
+<text x="204" y="920" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">购入价格（元） *</text>
+<rect x="204" y="933" width="146" height="44" rx="10" fill="#ffffff" stroke="#e6dfd3"/>
+<text x="217" y="960" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">购入时的价格</text>
+<text x="40" y="1003" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">商品成色 *</text>
+<rect x="40" y="1016" width="146" height="44" rx="10" fill="#ffffff" stroke="#e6dfd3"/>
+<text x="53" y="1043" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">几乎全新 ⌄</text>
+<text x="204" y="1003" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">交易校区 *</text>
+<rect x="204" y="1016" width="146" height="44" rx="10" fill="#ffffff" stroke="#e6dfd3"/>
+<text x="217" y="1043" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">SIP 校区 ⌄</text>
+<text x="40" y="1086" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">面交地点 *</text>
+<rect x="40" y="1099" width="310" height="44" rx="10" fill="#ffffff" stroke="#e6dfd3"/>
+<text x="53" y="1126" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">例如：图书馆入口 / 公共服务区（示例）</text>
+<text x="40" y="1169" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">好物故事 *</text>
+<rect x="40" y="1182" width="310" height="110" rx="10" fill="#ffffff" stroke="#e6dfd3"/>
+<text x="53" y="1209" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">买了多久、使用感受、为什么转让，还有需要说明的小细</text>
+<text x="53" y="1226.6" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">节…</text>
+<text x="40" y="1334" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">型号 *</text>
+<rect x="40" y="1347" width="310" height="44" rx="10" fill="#ffffff" stroke="#e6dfd3"/>
+<text x="53" y="1374" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">例如：USB 小风扇</text>
+<text x="40" y="1417" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="600" fill="#382d25" text-anchor="start">使用情况 *</text>
+<rect x="40" y="1430" width="310" height="44" rx="10" fill="#ffffff" stroke="#e6dfd3"/>
+<text x="53" y="1457" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#aaa197" text-anchor="start">例如：功能正常，使用一学期</text>
+<rect x="40" y="1511" width="15" height="15" rx="3" fill="#ffffff" stroke="#bfb2a1"/>
+<text x="65" y="1523" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="11" font-weight="400" fill="#756b62" text-anchor="start">这是一次毕业转让</text>
+<rect x="40" y="1549" width="310" height="91" rx="10" fill="#f4f7ed" stroke="none"/>
+<text x="52" y="1573" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#4b6846" text-anchor="start">这是演示发布，无需提供真实联系方式。发布后自动生成虚构的</text>
+<text x="52" y="1591" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#4b6846" text-anchor="start">示例联系信息。</text>
+<text x="18" y="1888" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="9" font-weight="400" fill="#756b62" text-anchor="start">✨ 保存到当前浏览器，好物信息由你掌握。</text>
+<rect x="18" y="1911" width="115" height="44" rx="11" fill="#ffffff" stroke="#e6d6be"/>
+<text x="75.5" y="1937.32" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="12" font-weight="700" fill="#382d25" text-anchor="middle">预览好物</text>
+<rect x="145" y="1911" width="227" height="44" rx="11" fill="#cc451c" stroke="none"/>
+<text x="258.5" y="1937.32" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">发布我的闲置 →</text>
+<g id="Mobile-navigation"><title>Mobile-navigation</title>
+<rect x="0" y="1978" width="390" height="72" rx="0" fill="#ffffff" stroke="none"/>
+<path d="M0 1978h390" stroke="#eee9e0"/>
+<svg x="38" y="1988" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#756b62" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v11h-6v-7H9v7H3Z"/></svg>
+<text x="48" y="2030" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#756b62" text-anchor="middle">逛一逛</text>
+<svg x="136" y="1988" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#756b62" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.7a5.4 5.4 0 0 0-7.7 0L12 5.8l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 21l8.8-8.6a5.4 5.4 0 0 0 0-7.7Z"/></svg>
+<text x="146" y="2030" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#756b62" text-anchor="middle">收藏</text>
+<rect x="227" y="1985" width="34" height="29" rx="10" fill="#ed592b" stroke="none"/>
+<svg x="235" y="1990" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+<text x="244" y="2030" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="700" fill="#ed592b" text-anchor="middle">发布</text>
+<svg x="332" y="1988" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#756b62" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a4 4 0 1 1-8 0a4 4 0 1 1 8 0M4 22v-2a8 8 0 0 1 16 0v2"/></svg>
+<text x="342" y="2030" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="400" fill="#756b62" text-anchor="middle">我的</text>
+</g>
+</svg>

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 430" fill="none">
+<title>橘子同学和它的校园闲置好物</title>
+<defs><linearGradient id="orange" x1="240" y1="120" x2="445" y2="320" gradientUnits="userSpaceOnUse"><stop stop-color="#FFA53A"/><stop offset="1" stop-color="#F47C28"/></linearGradient><linearGradient id="scooter" x1="400" y1="270" x2="560" y2="360" gradientUnits="userSpaceOnUse"><stop stop-color="#96CDB2"/><stop offset="1" stop-color="#63A88B"/></linearGradient></defs>
+<path d="M151 337c-53-97 1-220 100-242 87-19 200 4 254 87 61 93 32 173-62 194-103 23-239 17-292-39Z" fill="#FFD88A"/>
+<path d="M210 95c-13-26-2-45 16-45s23 24 10 43" fill="#FFF8E3"/><path d="M484 92c4-21 16-33 26-22 8 10-6 25-23 28" fill="#FFF8E3"/>
+<path d="m154 97 8 11m-19 3 12 3m5-30 4 10M540 199l11-6m-4 20 11 2" stroke="#E59F4C" stroke-width="4" stroke-linecap="round"/>
+<path d="m410 55 5 13 14 2-11 9 3 14-12-7-12 7 2-14-10-9 14-2 7-13Z" fill="#F6AD51"/>
+<ellipse cx="330" cy="380" rx="177" ry="18" fill="#E5B768" opacity=".22"/>
+<!-- A friendly orange character -->
+<path d="M344 127c-1-29 11-55 39-58 9 24-7 45-39 58Z" fill="#4C986D"/><path d="M345 124c-15-28-33-31-54-22 6 22 24 31 54 22Z" fill="#76B786"/>
+<path d="m342 139 3-31" stroke="#66442D" stroke-width="9" stroke-linecap="round"/>
+<path d="M430 248c0 62-37 100-97 100-64 0-110-41-107-101 3-59 46-96 102-94 62-9 102 30 102 95Z" fill="url(#orange)"/>
+<path d="M249 224c4-24 21-43 42-49" stroke="#FFC264" stroke-width="13" stroke-linecap="round"/>
+<path d="M271 324c-5 21-5 36 9 39 12 2 22-5 24-20M359 343c4 19 13 28 25 24 11-4 11-15 3-30" fill="#F1802F" stroke="#F1802F" stroke-width="10" stroke-linecap="round"/>
+<path d="M229 257c-21-3-32-13-40-31m237 42c22-2 31-13 38-25" stroke="#F88931" stroke-width="16" stroke-linecap="round"/>
+<ellipse cx="302" cy="248" rx="6" ry="9" fill="#653B24"/><ellipse cx="365" cy="248" rx="6" ry="9" fill="#653B24"/>
+<ellipse cx="281" cy="269" rx="12" ry="7" fill="#ED6E2B"/><ellipse cx="387" cy="269" rx="12" ry="7" fill="#ED6E2B"/>
+<path d="M319 271c7 11 23 11 30-1" stroke="#653B24" stroke-width="5" stroke-linecap="round"/>
+<path d="M311 305c13 6 29 5 42-1" stroke="#FFB856" stroke-width="4" stroke-linecap="round"/>
+<!-- Little desk fan -->
+<g transform="rotate(-10 155 230)">
+<path d="M120 322h68c7 0 11 5 11 10v7h-90v-7c0-6 5-10 11-10Z" fill="#82BDA6"/>
+<path d="M145 253h18v70h-18z" fill="#A0D4C0"/>
+<circle cx="154" cy="222" r="57" fill="#E9F3DF" stroke="#72AB91" stroke-width="8"/>
+<circle cx="154" cy="222" r="44" stroke="#BBD7BC" stroke-width="2"/>
+<path d="M153 219c-18-34-3-44 9-35 10 7 9 20-1 34M153 223c-37 7-42-10-29-18 10-7 23-2 30 12m4 7c23 30 11 44-1 38-11-5-14-18-5-34" fill="#8EC0A7"/>
+<circle cx="154" cy="222" r="10" fill="#FFF9E6" stroke="#72AB91" stroke-width="3"/>
+<path d="M111 222h86m-43-43v86m-30-74 60 60m0-60-60 60" stroke="#72AB91" stroke-width="1.3" opacity=".6"/>
+</g>
+<!-- A tiny electric campus scooter -->
+<g transform="translate(402 245)">
+<ellipse cx="85" cy="126" rx="100" ry="9" fill="#B38F55" opacity=".17"/>
+<circle cx="20" cy="104" r="24" fill="#4E5649"/><circle cx="20" cy="104" r="12" fill="#D3D9C7"/><circle cx="156" cy="104" r="24" fill="#4E5649"/><circle cx="156" cy="104" r="12" fill="#D3D9C7"/>
+<path d="M19 77c-25 0-35 16-33 25h60c3-14-6-25-27-25Z" fill="#81B99F"/>
+<path d="M25 53h55l7 40h44l-4-65h33l-2 64c-1 11-10 17-24 17H78c-12 0-17-8-21-18l-9-20H25V53Z" fill="url(#scooter)"/>
+<path d="m146 29-9-37-19-7" stroke="#6B9D83" stroke-width="11" stroke-linecap="round"/>
+<path d="m119-15-12-2" stroke="#4F5B48" stroke-width="9" stroke-linecap="round"/>
+<path d="M132 3h22c6 0 9 5 7 11l-3 10h-22l-4-21Z" fill="#FFF6C4" stroke="#6B9D83" stroke-width="4"/>
+<path d="M17 44h60c6 0 10 5 10 11v5H9v-5c0-6 3-11 8-11Z" fill="#6D624C"/>
+<path d="M-1 55v19m-9-19h21" stroke="#6D624C" stroke-width="5" stroke-linecap="round"/>
+<path d="M144-3v-21" stroke="#6D624C" stroke-width="3"/><ellipse cx="145" cy="-28" rx="10" ry="7" fill="#9DC7AE" stroke="#6D624C" stroke-width="3"/>
+<path d="m91 46 8-12-2 12h9L94 62l2-16h-5Z" fill="#EAF4DC"/>
+</g>
+<!-- Small floating stickers -->
+<g transform="rotate(12 520 120)"><rect x="482" y="99" width="91" height="44" rx="14" fill="#FFF9E9"/><path d="m496 122 7 6 11-13" stroke="#61A080" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M528 116h29m-29 11h18" stroke="#B69869" stroke-width="4" stroke-linecap="round"/></g>
+<path d="m103 144 4 9 10 1-8 6 2 10-8-5-9 5 2-10-7-6 10-1 4-9Z" fill="#EAAF54"/>
+<path d="M570 301c11-8 17-2 10 6m-1-8c4-12 13-8 8 1" stroke="#CF9B55" stroke-width="3" stroke-linecap="round"/>
+</svg>
