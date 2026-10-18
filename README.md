@@ -20,18 +20,23 @@ npm run dev
 
 若中继已在另一终端运行，用 `npm run dev:site` 只启动网站；需要手动迁移时仍可运行 `npm run db:migrate`。这些迁移只操作本地模拟数据库，正式迁移由 Sites 发布流程应用。特殊环境配置可直接运行 `node scripts/run-framework.mjs dev --port 4174`，自行负责迁移、中继及 Origin 一致性。
 
-**QQ 邮箱本地测试版**已由用户启用并完成一次真实邮件登录验收。用户现已要求公网中继，Render 部署准备与开通条件见下方“部署与当前限制”；生产发信在中继就绪前保持关闭。新环境邮箱登录默认关闭，可以先使用访客浏览。根目录运行以下命令准备新的本地中继；将 `你的QQ邮箱` 替换为自己的完整数字 QQ 邮箱地址：
+首选公网发信为 **Gmail + Google Apps Script**，无需购买发件域名或租用服务器。维护者授权的 Gmail 发验证码，学生仍使用学校邮箱验证码登录，不需要 Google 账号。新环境邮箱登录默认关闭，可以先用访客浏览。准备私有配置：
 
 ```powershell
-npm --prefix relay ci
-npm run mail:setup -- 你的QQ邮箱
+npm run mail:gmail:setup -- 你的Gmail地址
 ```
 
-脚本自动生成根 `.env.local` 与 `relay/.env.local`，配对中继令牌和网站 HMAC 密钥，发信保持关闭。由你在 QQ 邮箱安全设置中生成新的客户端授权码，私下填入 `relay/.env.local` 的 `QQ_SMTP_AUTH_CODE`；然后运行 `npm run mail:setup -- --enable`。此命令只检查格式，不验证凭据或发送邮件。
+此命令仅准备忽略的 `gmail-apps-script/.env.local`，生成共享密钥和默认 50 次/滚动 24 小时额度；默认保留已有根配置，不发邮件或代替 Google 授权。将 `gmail-apps-script/Code.js` 和清单复制到自己 Google 账号的 Apps Script，配置私有 Script Properties，完成发信授权并部署正式 Web 应用后，再保存地址和启用本地入口：
 
-配置完成后，从仓库根目录运行 `npm run dev`，访问 <http://localhost:4174/#/login>；根配置 Origin 同样使用 `http://localhost:4174`。如果希望手动管理中继，两个终端分别运行 `npm run mail:relay` 与 `npm run dev:site`，不要再同时运行自动启动入口。端口被占用时先停止对应的旧服务。QQ 凭据只留在独立中继，不能进入 Worker 或浏览器。准备脚本复用已有令牌，遇 `.dev.vars` 覆盖或令牌冲突时拒绝改写。
+```powershell
+npm run mail:gmail:setup -- 你的Gmail地址 --url https://script.google.com/macros/s/实际部署ID/exec
+npm run mail:gmail:setup -- 你的Gmail地址 --enable
+npm run dev
+```
 
-完整步骤、额度和限制见 [AUTH_SETUP.md](AUTH_SETUP.md)，公开格式参考见 [.env.example](.env.example)。Resend 与自有已验证发件域名保留为备选。学校邮箱是收件人，个人 QQ 邮箱是发件人；不冒充校方发信。中继默认本地模式只监听回环地址，**不能仅填写 QQ 授权码就让公开网站具备发信能力**；生产需部署 HTTPS 中继并独立配置服务端秘密值。
+`--enable` 只启用本地配置，不能证明 Google 授权或送达；仍需自己控制的学校邮箱实际收码并登录。访问 <http://localhost:4174/#/login>，Origin 保持一致；Gmail 路径不启动 QQ 中继。MailApp 仅请求发信权限，不读取 Gmail 收件箱。普通 Gmail 当前 Google 额度为每日 100 个收件人，本站默认限 50 次，适合小规模试用。[MailApp](https://developers.google.com/apps-script/reference/mail/mail-app)、[Google 额度](https://developers.google.com/apps-script/guides/services/quotas)
+
+完整授权、部署、私密环境设置、停用与轮换步骤见 [AUTH_SETUP.md](AUTH_SETUP.md)，公开格式参考见 [.env.example](.env.example)。QQ 本地 SMTP 和 Resend 保留备选；用户已决定暂不产生费用，Render 仅保留 QQ 部署包，未创建收费服务。真实地址与密钥不提交 Git、不发到聊天。学校邮箱是收件人，个人 Gmail 或 QQ 是发件人，不冒充校方。
 
 本地开发也必须通过邮箱验证码取得交易权限，不提供模拟业务账号。宿主平台的登录状态不授予本应用权限。选择访客或退出会清除本站会话；历史商品与收藏保留，不会自动合并到新邮箱账号。
 
@@ -61,7 +66,7 @@ npm run check
 | 原生界面 | `public/app.js`、`public/styles.css`；`public/data.js` 只保留分类等界面常量，不包含示例商品 |
 | HTML 入口 | `legacy/index.html`；根路由 `app/route.ts` 以 raw HTML 返回它 |
 | 交易接口 | `server/market.mjs` 与 `app/api/[[...path]]/route.ts`，处理身份、商品、收藏、联系方式和图片权限 |
-| 学校邮箱认证与邮件 | `server/school-auth.mjs` 处理验证码、昵称、限流与会话；`relay/` 提供 QQ SMTP 中继及独立生产部署入口，保留 Resend 备选；本地准备入口为 `npm run mail:setup` |
+| 学校邮箱认证与邮件 | `server/school-auth.mjs` 处理验证码、昵称、限流与会话；`gmail-apps-script/` 提供 Google 托管的发信程序，准备入口 `npm run mail:gmail:setup`；`relay/` 和 `mail:setup` 保留 QQ 备选，另支持 Resend |
 | 数据模型与迁移 | `db/schema.ts`、`drizzle/`；D1 存记录，R2 存照片内容 |
 | 托管关联 | `.openai/hosting.json`，使用已有项目及 `DB`、`BUCKET` 绑定 |
 | 设计交付 | `design/` 与设计生成脚本；`design/demo-data.js` 中的旧假商品只用于静态 SVG 生成 |
@@ -80,10 +85,10 @@ npm run check
 
 自动化检查、本地 Vinext / D1 / R2 联测和浏览器操作应分别记录结果。接口上传成功不能代替照片选择、发布到个人中心的完整 UI 验收；受控邮件测试不能代替真实学校收件箱送达。
 
-已有一次真实本地链路验收记录：仅发送 1 封验证码邮件到维护者控制的学校邮箱，QQ 接受发送、学校 OWA 确认收件、同一浏览器填码完成登录，个人中心显示学校邮箱已验证，刷新后会话保持。该次仅确认可进入发布页，未填写商品信息或创建商品。错误、过期等验证码边界目前仍仅由 mock／受控测试覆盖；单次成功不保证所有学校邮箱或后续邮件均可送达。本轮账号资料、商品管理及启动入口的最新验证结果单独记录在 [QA.md](QA.md)。
+QQ 本地链路曾完成真实学校收件、同一浏览器验证码登录和刷新保持会话；这不代表 Gmail 或生产环境已经验收。验证码错误、过期等边界的受控测试和实际收件结果分别记录。当前 Google 授权、Web 应用部署、Sites 发布、学校收件与生产会话结果见 [QA.md](QA.md)，不能只因代码准备或接口确认就宣称全部开通。
 
-已有托管网址：<https://juzi-campus-market.open-bloom-6517.chatgpt.site>。公网中继目标为 Render 新加坡单实例、1 GB 持久盘及平台分配的 HTTPS 域名，不需要购买自有域名。当前最小付费配置估计约 **US$7.25/月**，税费与超额使用另计，以创建页面报价为准。[官方定价](https://render.com/pricing)免费实例拦截 SMTP 465，不能用于此 QQ 方案。[官方限制](https://render.com/docs/free)
+已有托管网址：<https://juzi-campus-market.open-bloom-6517.chatgpt.site>。Gmail 路径使用 Google 分配的 HTTPS Web 应用地址，Sites 服务端以签名请求调用，不要求学生访问 Google 或授予权限。正式邮件额度与实际送达仍受 Google 和学校收件系统限制。
 
-当前已准备公网部署代码和清单，Render 账号连接、付费资源预算与私密配置仍待确认，生产中继尚未实际部署。Sites 发信在真实 HTTPS 中继就绪之前保持关闭；应用发布与实际验收状态见 [DEPLOYMENT.md](DEPLOYMENT.md) 和 [QA.md](QA.md)。邮件接口返回 ID 本身只表示服务商接受发送；本地收件成功不能替代生产访问、送达和权限验证，Cloudflare 访问结果单独记录。
+Google 账号授权、正式脚本部署和平台秘密值需实际完成后才能启用 Sites 发信；步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)。公开访问、邮件送达和权限分别验收，Cloudflare 拦截结果单独记录，本地成功不能替代公网验收。
 
 **GitHub push 或合并 PR 不会自动部署 Sites。** 数据库版需要通过 Sites 发布到已有项目，步骤和发布记录要求见 [DEPLOYMENT.md](DEPLOYMENT.md)。旧静态版的浏览器验收记录仅说明旧版本行为，不代表数据库版自动通过。

@@ -1,124 +1,105 @@
-# 学校邮箱验证码：QQ 发信配置
+# 学校邮箱验证码：Gmail 免费发信配置
 
-采用用户选择的 **QQ 邮箱发件、独立 Node 中继转发**。本地链路已完成一次真实 QQ 发信、学校收件与验证码登录验收，具体范围见第 4 节。用户现已要求公网部署，生产准备与开通条件见第 6 节；准备部署包不等于公网邮件已开通。Resend 保留为备选。
+首选方案为 **Gmail + Google Apps Script**：网站服务端通过 HTTPS 请求 Google 托管的程序，由维护者授权的 Gmail 向学校邮箱发验证码，不需要购买发件域名或租用服务器。学生仍使用学校邮箱验证码登录，**不是 Google 账号登录**。免费额度适合小规模试用，不保证无限量或固定可用性。
 
-本站仍只有“学校邮箱验证码登录”和“访客浏览”。登录收件域严格限制为 `student.xjtlu.edu.cn`；验证只证明邮箱控制权，**不代表核实当前在读学籍、校方背书或实际校区**。未开通发信时明确显示不可发送，不提供假验证码或模拟业务账号。访客只能查看公开商品，不能发布、收藏或读取卖家联系方式。
+代码接入、Google 授权、Web 应用部署、Sites 环境启用、实际收件和生产登录分别验收；代码准备完成不表示已经开通，实际状态见 [QA.md](QA.md)。QQ 本地发信保留为备选。用户已选择暂不产生费用，Render 仅保留部署包，未创建收费资源。
 
-每次验证码验证成功，账号昵称更新为此次输入邮箱的前缀去掉数字 `0..9`，保留大小写并限制为 20 个字符；空结果使用“橘子同学”。手动修改昵称后，下次验证码登录会再次按邮箱生成。邮箱派生昵称可能包含姓名，会预填未来商品表单；发布前可改为愿意公开的卖家昵称，已有商品不会随账号更新改名。
+本站只有“学校邮箱验证码登录”和“访客浏览”。收件域严格为 `student.xjtlu.edu.cn`；验证只证明邮箱控制权，**不代表核实当前在读学籍、校方背书或实际校区**。访客只读公开商品，发布、收藏和卖家联系方式需要学校邮箱会话。未配置时明确显示不可发送，不提供假验证码或模拟账号。
 
-## 1. 安装并准备本地配置
+每次验证码登录成功，昵称按此次输入邮箱前缀移除 ASCII 数字 `0..9`，保留大小写、最多 20 个字符，空结果使用“橘子同学”。下次验证码登录会覆盖手动昵称。派生昵称可能包含姓名并预填新商品表单，发布前可以修改；既有商品不会批量改名。
 
-需要 Node.js 22.13+，以下命令均在仓库根目录运行。首次安装根依赖和中继的独立依赖：
+## 1. 准备私有配置
+
+需要 Node.js 22.13+，在仓库根目录运行：
 
 ```powershell
 npm ci
-npm --prefix relay ci
+npm run mail:gmail:setup -- 你的Gmail地址
+```
+
+将占位符替换为自己的 Gmail。此命令只准备被 Git 忽略的 `gmail-apps-script/.env.local`，保存发件账号、高熵共享密钥和脚本额度，初始 `ENABLED=false`。默认不改动根 `.env.local`，不影响已有 QQ 本地配置；不发邮件、不创建 Google 部署或代替账号授权。不要把生成的秘密值粘贴到聊天、Issue、截图或公开代码。
+
+## 2. 创建 Google 托管的发信程序
+
+1. 用作发件人的 Gmail 账号打开 [Google Apps Script](https://script.google.com/home)，新建独立项目。发件人由部署并授权脚本的 Google 账号决定，不能通过填写任意邮箱冒用发件人。
+2. 将 [gmail-apps-script/Code.js](gmail-apps-script/Code.js) 的完整内容复制到 `Code.gs`。在项目设置中显示清单，将 [gmail-apps-script/appsscript.json](gmail-apps-script/appsscript.json) 复制为 `appsscript.json`，保存。
+3. 在“项目设置 → 脚本属性”私下配置下表。属性可被项目编辑者访问，仅向必要维护者授予编辑权限。
+4. 部署为 **Web 应用**，执行身份选“我”，访问权限选“任何人”，由账号本人审阅并完成 Google 发信授权。页面名称以当前界面为准；账号验证或未验证应用提示由本人处理。
+5. 保存正式 `https://script.google.com/macros/s/<部署ID>/exec` 地址。`/dev` 只供编辑者测试，不能填入 Sites。
+
+| Script Property | 设置 |
+| --- | --- |
+| `JUZI_GMAIL_SCRIPT_SECRET` | 本地准备文件中的至少 32 字符高熵共享密钥，与网站同名服务端秘密值一致；不要复用网站验证码 HMAC 密钥 |
+| `ENABLED` | 初始 `false`，准备完成并获准发送后改为 `true` |
+| `JUZI_GMAIL_DAILY_LIMIT` | 默认 `50`，允许 `1..100`；预留后失败或不确定的请求也计数 |
+
+清单只请求 `https://www.googleapis.com/auth/script.send_mail`。本实现用 **MailApp** 发信，不请求读取 Gmail 收件箱的权限，也不需要 Gmail SMTP 授权码。[MailApp 官方说明](https://developers.google.com/apps-script/reference/mail/mail-app)、[部署与执行身份](https://developers.google.com/apps-script/guides/web)
+
+普通 Gmail 当前 Apps Script 邮件额度为每天 **100 个收件人**，按用户计算，首次请求后 24 小时重置；额度可能调整，也会受同账号其他脚本影响。本站默认 50 次/滚动 24 小时，另检查 Google 剩余额度；还受执行、并发和存储限制。公开端点即使拒绝无效签名，也可能消耗执行资源。[Google 官方额度](https://developers.google.com/apps-script/guides/services/quotas)
+
+## 3. 配置网站服务端
+
+正式脚本部署完成后，可把 URL 保存进私有准备文件：
+
+```powershell
+npm run mail:gmail:setup -- 你的Gmail地址 --url https://script.google.com/macros/s/实际部署ID/exec
+```
+
+Sites 生产配置通过平台原生环境设置注入；本地使用忽略的根 `.env.local`。不要上传环境文件，也不要给秘密值加 `VITE_` 或 `NEXT_PUBLIC_` 前缀。
+
+| 网站服务端变量 | 设置 |
+| --- | --- |
+| `JUZI_EMAIL_PROVIDER` | `gmail_apps_script` |
+| `JUZI_GMAIL_SCRIPT_URL` | 正式部署的精确 HTTPS `/exec` 地址，无查询、片段或用户信息 |
+| `JUZI_GMAIL_SCRIPT_SECRET` | 与 Script Properties 相同，作为服务端秘密值保存 |
+| `JUZI_EMAIL_AUTH_SECRET` | 独立的至少 32 字符高熵验证码 HMAC 密钥，保留已有有效值，不为切换服务无故轮换 |
+| `JUZI_EMAIL_ORIGIN` | 本地 `http://localhost:4174`；生产 `https://juzi-campus-market.open-bloom-6517.chatgpt.site`，均无末尾斜线 |
+| `JUZI_EMAIL_DAILY_LIMIT` | 建议明确设为 `50`，与脚本额度同时生效 |
+| `JUZI_EMAIL_ENABLED` | 准备与授权完成前 `false`，开通并进行实际验收时设为 `true` |
+
+学校邮箱是**收件人**，维护者 Gmail 是**发件人**，不冒充学校。网站向脚本发送带时间戳、请求 ID 和 HMAC 签名的 JSON，密钥不提供给浏览器。Apps Script 事件不提供任意 HTTP 鉴权头，因此这里不依赖 Bearer 头。
+
+脚本只接受学校域、6 位验证码和固定邮件内容，不是任意邮件转发器。发送前在 Script Properties 持久预留，用脚本锁防并发重复；仅保存请求标识、摘要、时间和状态，不保存完整收件地址或验证码。同一成功请求返回原确认，失败或不确定请求不自动重发，不要清空账本绕过额度。Google 的 Content Service 会重定向响应，适配器仅在允许的 Google 域读取结果，不再转发原邮件正文。[重定向说明](https://developers.google.com/apps-script/guides/content#redirects)
+
+## 4. 本地启动与实际验收
+
+脚本已授权、正式 URL 可用且两侧属性匹配后，启用本地入口：
+
+```powershell
+npm run mail:gmail:setup -- 你的Gmail地址 --enable
 npm run build
-npm run mail:setup -- 你的QQ邮箱
-```
-
-将 `你的QQ邮箱` 替换为自己的完整数字 QQ 邮箱地址，不要照抄占位符。授权码不要贴到公开 Issue、截图或聊天中。学校邮箱是验证码的**收件人**，个人 QQ 邮箱是**发件人**，不冒充学校发信。
-
-`mail:setup` 只准备以下被忽略的本地文件，不连接 QQ、不发送邮件：
-
-- 根目录 `.env.local`：生成验证码 HMAC 密钥、Worker 一侧的中继令牌，选择 `qq_relay`，发信开关保持 `false`。
-- `relay/.env.local`：填写发件账号，配置匹配的中继令牌；QQ 授权码初始留空，需你私下填写。
-
-脚本复用已有有效密钥，不自动轮换令牌；如果两侧已有令牌不一致，会拒绝改写。检测到根目录 `.dev.vars` 时也会拒绝覆盖，因为它优先于 `.env*`。先核对并统一现有本地配置，再运行脚本，不要同时维护两份相互覆盖的值。
-
-默认站点 Origin 为 `http://localhost:4174`，中继地址为 `http://127.0.0.1:4180/send`。脚本会保留已有合法的 localhost Origin；若以前使用其他端口，请将根 `.env.local` 的 Origin 统一为本次的 `http://localhost:4174`。访问网页时不要改用 `127.0.0.1`，两者不是同一个 Origin。
-
-## 2. 自己生成 QQ 客户端授权码
-
-在 QQ 邮箱网页进入设置或安全设置，找到 **POP3 / IMAP / SMTP** 服务，开启 SMTP，再按当前页面完成安全校验并生成客户端授权码。菜单名称和验证方式可能变化，以当前 QQ 页面为准。已经开启 SMTP 不代表已取得新的可用授权码；生成凭据和安全验证需要你本人完成。
-
-在本地编辑 `relay/.env.local`，只需将 `QQ_SMTP_AUTH_CODE` 填为你生成的 **16 位字母授权码**。不要填 QQ 登录密码，不要把授权码放进根 `.env.local`、Worker、浏览器代码或 Git。
-
-中继固定使用 `smtp.qq.com:465`、TLS 并校验证书；QQ 邮箱地址作为 SMTP 用户名，授权码作为 SMTP 密码。腾讯官方说明同样要求使用授权码而非邮箱密码，见[腾讯云“配置邮件”说明](https://cloud.tencent.com/document/product/1207/45117)。
-
-填写后，在仓库根目录启用本地入口：
-
-```powershell
-npm run mail:setup -- --enable
-```
-
-此命令复用已保存的发件账号与令牌，只检查授权码格式，不验证 QQ 凭据是否真实有效，也不发送邮件。命令成功只表示本地开关已启用；实际连接失败、授权码失效或 QQ 拒绝发送时，页面仍应明确报错。
-
-## 3. 一个终端启动网站与邮件中继
-
-配置启用后，在仓库根目录运行：
-
-```powershell
 npm run dev
 ```
 
-启动器先应用项目的本地数据库迁移，再同时启动已启用、配置匹配的 QQ 中继和网站；首次使用仍须先运行 `npm run build`。默认网站端口来自精确的 `JUZI_EMAIL_ORIGIN`，本项目为 `http://localhost:4174`，未配置 Origin 时默认 4174。启用邮件时，显式端口必须与 Origin 一致，不能把网页地址改成 `127.0.0.1`。
+`--enable` 只核对私有配置并选择本地 Gmail 服务商，保留已有网站 HMAC 密钥及备选配置；它不验证实际 Google 授权或邮件送达。打开 <http://localhost:4174/#/login>，地址必须与 Origin 一致，不要改用 `127.0.0.1`。Gmail 路径调用远程 HTTPS，无需启动 QQ 中继。启动先应用本地迁移，本身不发邮件；改配置后停止对应旧服务再重启，避免端口冲突。
 
-按 `Ctrl+C` 停止本次启动的网站与中继子进程。启动或迁移不会发送验证码；只有在网页请求验证码才发信。端口已被占用时，先停止对应旧服务，不重复启动中继。
+用自己控制的学校邮箱申请一封验证码，确认学校收件箱收到，再在发起请求的同一浏览器填码。确认个人中心显示“学校邮箱已验证”、昵称正确、刷新会话保持，退出后访客不能发布、收藏或读取联系方式。发送成功仅代表 Google 接受邮件，不能代替实际送达；超时后不要盲目自动重发。
 
-若希望手动运行中继，两个终端分别执行：
+生产另行发布应用、设置平台秘密值，分别验证公开访问、学校收件与生产会话。Cloudflare 拦截与邮件配置是不同环节，部署成功或本地成功都不能证明公网已可访问。实际结果记录在 [QA.md](QA.md)，不能把 mock 传输测试写成真实发信。
+
+验证码 10 分钟有效，每挑战最多 5 次尝试，绑定浏览器且一次使用。发送失败也计数：同邮箱至少间隔 60 秒、最多 10 次/滚动 24 小时；同浏览器最多 20 次。会话固定 7 天，Cookie 使用 `HttpOnly`、`SameSite=Lax`，生产另有 `Secure`。浏览器绑定 Cookie 保留 24 小时，退出或访客不清除此非登录限流标识。字段与保留限制见 [PRIVACY.md](PRIVACY.md)。
+
+## 5. 更新、停用与密钥轮换
+
+修改脚本后，在“管理部署”中为现有部署选择新版本并保存；只保存编辑器不会更新正式 `/exec`。记录代码提交和部署版本，回退时选择先前兼容版本。Script Properties 是项目共享配置，回退代码不会回退密钥、额度或账本，不要删除账本作为回退手段。
+
+停用时先设网站 `JUZI_EMAIL_ENABLED=false`，再设脚本 `ENABLED=false`，必要时停用 Google 部署或撤销授权。轮换共享密钥时先停发，生成新值并更新脚本和 Sites 两侧，发布/重启运行时后再启用和验收。不要轮换无关的 `JUZI_EMAIL_AUTH_SECRET`；它用于网站验证码校验，变更会使尚未使用的验证码失效。
+
+## 6. QQ 本地与 Resend 备选
+
+QQ 本地链路曾完成真实收件与登录，不代表 Gmail 或生产已验收。切回 QQ 前先停止当前服务并保留原配置：
 
 ```powershell
-npm run mail:relay
+npm --prefix relay ci
+npm run mail:setup -- 你的QQ邮箱
 ```
 
-```powershell
-npm run dev:site
-```
+将占位符替换为自己的完整数字 QQ 邮箱。脚本选择 `qq_relay` 并保持发信关闭，配对根 `.env.local` 与 `relay/.env.local` 令牌、复用有效网站密钥；遇 `.dev.vars` 覆盖或令牌冲突会拒绝改写。该命令会切换本地服务商，避免无意覆盖 Gmail 选择。
 
-`dev:site` 同样先应用本地迁移，但只启动网站，适用于中继已经单独运行的情况。特殊环境配置可直接运行 `node scripts/run-framework.mjs dev --port 4174`，自行执行本地迁移、启动中继并核对 Origin。手动迁移命令为 `npm run db:migrate`，仅操作本地模拟库。
+本人在 QQ 安全设置开启 SMTP、生成客户端授权码，私下填写 `relay/.env.local` 的 `QQ_SMTP_AUTH_CODE`，不要使用 QQ 登录密码或发到聊天。运行 `npm run mail:setup -- --enable` 仅检查格式并启用，不验证凭据或发信。之后 `npm run dev` 自动启动网站和中继，或分开运行 `npm run mail:relay`、`npm run dev:site`。[腾讯配置说明](https://cloud.tencent.com/document/product/1207/45117)
 
-打开 <http://localhost:4174/#/login>。邮箱服务未启用时可以直接使用访客浏览。修改授权码或环境配置后，重启对应服务；自动启动时先 `Ctrl+C` 再运行 `npm run dev`。
+中继固定连接 `smtp.qq.com:465` 并校验证书，默认监听 `127.0.0.1:4180`；网站使用 `JUZI_EMAIL_RELAY_URL=http://127.0.0.1:4180/send` 和 `JUZI_EMAIL_RELAY_TOKEN`，中继使用匹配的 `JUZI_RELAY_TOKEN`、`QQ_SMTP_USER`、`QQ_SMTP_AUTH_CODE`，QQ 凭据不进入 Worker。忽略目录 `relay/.state/` 保存 SQLite 账本，默认 50 次/滚动 24 小时，失败和不确定请求计数，重启不重置。本地回环服务不会自动公开上线。
 
-默认本地模式中继只监听 `127.0.0.1`，不是公网服务。网站服务端通过带鉴权的本地 HTTP 请求联系中继，中继再连接 QQ SMTP；Worker 不直接使用 SMTP、原始 TCP 或 QQ 授权码。公网部署必须使用单独的生产模式和私密环境变量，不能将本地回环 URL 填入 Sites。
+仓库保留 `render.yaml` 和 QQ 生产部署包，**用户已决定暂不产生费用，未创建 Render 收费资源**；Gmail 路径不依赖它。详见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
-### 两侧配置的职责
-
-| 文件 | 关键变量 | 用途 |
-| --- | --- | --- |
-| 根 `.env.local` | `JUZI_EMAIL_PROVIDER=qq_relay`、`JUZI_EMAIL_ENABLED`、`JUZI_EMAIL_ORIGIN` | 本地网站的发信方式、开关和精确 Origin |
-| 根 `.env.local` | `JUZI_EMAIL_RELAY_URL`、`JUZI_EMAIL_RELAY_TOKEN` | 指向本地中继并鉴权；默认 URL 为 `http://127.0.0.1:4180/send` |
-| 根 `.env.local` | `JUZI_EMAIL_AUTH_SECRET` | 至少 32 字符的高熵验证码 HMAC 密钥，自动生成，只在网站服务端使用 |
-| `relay/.env.local` | `QQ_SMTP_USER`、`QQ_SMTP_AUTH_CODE` | QQ 发件账号和客户端授权码，仅中继使用 |
-| `relay/.env.local` | `JUZI_RELAY_TOKEN` | 与根配置的 `JUZI_EMAIL_RELAY_TOKEN` 相同，由脚本配对 |
-| 两侧私有配置 | `JUZI_EMAIL_DAILY_LIMIT`、`QQ_RELAY_DAILY_LIMIT` | 网站和中继各自的滚动 24 小时额度，本地准备脚本默认均为 `50`，可按需求调低 |
-
-根目录 [.env.example](.env.example) 只是公开格式参考，不含密钥。QQ 路径优先使用准备脚本，不需要先复制样例。不要给秘密值添加 `VITE_` / `NEXT_PUBLIC_` 前缀，也不要放入托管清单、构建产物或日志。
-
-## 4. 验证码、账本与验收边界
-
-用户填写自己的学校邮箱后申请 6 位验证码，只有发送接口取得真实服务端确认后，页面才显示已发送和重发倒计时。SMTP 接受邮件不等于学校收件箱已送达。
-
-验证码 10 分钟有效，每挑战最多尝试 5 次，绑定浏览器且成功后只能使用一次。网站持久层只保存验证码 HMAC 摘要；完整邮箱和验证码仅在发送流程中临时处理，邮件服务商及学校收件系统会处理邮件。
-
-发送限制按滚动 24 小时计算，失败发送也计数：同邮箱至少间隔 60 秒、最多 10 次；同浏览器最多 20 次。本地 QQ 配置的网站上限与中继上限默认各为 50 次，必须同时满足两层额度；重启进程不会重置已保存的限流记录。
-
-中继的 SQLite 账本位于忽略目录 `relay/.state/`，保存请求 ID、邮箱 SHA-256、请求内容 HMAC 和发送状态，不保存完整收件邮箱、验证码或授权码。先持久预留再发信；同 ID、同内容的成功重放返回原确认，失败或状态不确定的请求不会自动重发。不要通过清空账本来绕过额度或重试不确定发送。
-
-网站会话固定 7 天，使用 `HttpOnly`、`SameSite=Lax` Cookie；生产环境另要求 `Secure`。验证码浏览器绑定 Cookie 保留 24 小时，退出或选择访客不会清除它，以免切换身份重置发送额度。访客不创建可写账号。账号关联、字段范围和保留限制见 [PRIVACY.md](PRIVACY.md)。
-
-登录后可在个人中心修改昵称和常用校区，作为未来新建商品表单的默认值；账号昵称在下次验证码登录时按邮箱规则更新，账号资料不会改写已有商品。商品可下架、标记售出、重新上架及移入可恢复的「已删除」，删除后先恢复为下架。非上架商品及其联系方式、未被其他上架商品引用的照片仅本人可见。收藏关联保留，不可见商品暂时隐藏，重新上架后再显示。发布草稿只在当前页面内存中保留，刷新或关闭后丢失，不是服务端草稿。
-
-已有真实本地验收记录仅发送 **1 封**验证码邮件到维护者控制的学校邮箱：QQ 接受发送，学校 OWA 中确认收到，在同一浏览器填码完成验证，个人中心显示“学校邮箱已验证”，刷新页面后会话仍保持。该次仅确认可进入发布页，未填写商品信息或创建商品，也未修改或发布生产环境。文档不记录实际邮箱、验证码或凭据。本轮新增基础功能的验证单独记录在 [QA.md](QA.md)。
-
-这只证明此次本地链路成功，不保证其他学校邮箱、其他时段或生产环境的送达。错误、过期、尝试上限等验证码边界目前仍仅由 mock／受控测试覆盖，未逐项进行真实邮件验收。凭据格式检查、mock 测试与 QQ 接受邮件本身仍不能替代实际收件确认。
-
-## 5. Resend 备选
-
-如以后改用 Resend，需要维护者自己的 Resend 账号和自有、已验证的发件域名。根配置改为 `JUZI_EMAIL_PROVIDER=resend`，填写 `JUZI_EMAIL_FROM`、`RESEND_API_KEY`，保留通用 Origin、HMAC 密钥和发送额度；QQ 中继变量不用于此分支。按需重启本地服务，完成真实收信验收后再使用。
-
-发件域不能冒用学校域或 Sites 托管域名；域名验证与发送接口分别见[Resend 发件域说明](https://resend.com/docs/dashboard/domains/introduction)和[发送邮件接口](https://resend.com/docs/api-reference/emails/send-email)。Resend 返回邮件 ID 也只代表服务商接受发送。
-
-## 6. 公网中继与 Sites 开通
-
-**当前本地方案不会让公开网站自动具备发信能力。** 生产 Worker 不能访问你电脑上的 `localhost` 或 `127.0.0.1`，仅填写 QQ 授权码也不会把中继部署到网上。
-
-公网部署目标为 Render 付费 Web Service，使用平台分配的 `*.onrender.com` HTTPS 地址，不需要自有域名。当前最小付费计算计划 `0.5c-512mb` 为 US$7/月，1 GB 持久盘为 US$0.25/月，合计约 **US$7.25/月**，税费与超额使用另计，最终以创建页面报价为准。[官方定价](https://render.com/pricing)免费实例拦截 SMTP 465 且不能挂载持久盘，不能用来部署此 QQ 中继。[免费版限制](https://render.com/docs/free)
-
-仓库的 Render 部署清单准备为新加坡单实例、固定 Node.js 22.16.0、1 GB 挂载磁盘及健康检查。SQLite 账本必须写入持久盘，不能因重新部署清空去重或额度；保持单实例以符合账本独占锁。健康检查仅证明 HTTP 服务可响应，不连接 QQ、不发邮件，也不能替代收件验收。[磁盘规则](https://render.com/docs/disks)
-
-当前生产中继尚未部署：需先连接维护者的 Render 账号，确认上述付费资源预算，再把 QQ 发件账号、授权码和独立生产中继令牌放入该服务的私密环境变量。生产 QQ 凭据不复制进 Worker、浏览器、Git 或部署清单。本地凭据和账本保持独立；不能把本地 `.env.local` 直接打包上传。
-
-中继取得实际 HTTPS `/send` 地址并验证持久盘、鉴权与发送额度后，通过 **Sites 原生环境设置**注入 `JUZI_EMAIL_PROVIDER=qq_relay`、精确生产 `JUZI_EMAIL_ORIGIN`、独立 `JUZI_EMAIL_AUTH_SECRET`、`JUZI_EMAIL_RELAY_URL`、匹配的 `JUZI_EMAIL_RELAY_TOKEN` 及明确的 `JUZI_EMAIL_DAILY_LIMIT`。在中继可用之前保持生产发信关闭；上线流程和状态记录见 [DEPLOYMENT.md](DEPLOYMENT.md)。
-
-应用部署、公开访问、邮件送达和生产会话分别验收。发送接口确认只代表 QQ 接受邮件，必须用维护者控制的学校邮箱实际收码并登录；不能用健康检查、mock 测试或一次本地成功代替生产验收。Cloudflare 公开访问结果单独记录。
+若以后使用 Resend，需维护者自有且已验证的发件域名，配置 `JUZI_EMAIL_PROVIDER=resend`、`JUZI_EMAIL_FROM` 和服务端秘密值 `RESEND_API_KEY`。学校收件域和 Sites 域不能冒用；Gmail 路径不需要这项域名验证。[Resend 发件域](https://resend.com/docs/dashboard/domains/introduction)、[发送接口](https://resend.com/docs/api-reference/emails/send-email)

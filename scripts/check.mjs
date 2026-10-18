@@ -13,10 +13,10 @@ const app=await readFile('public/app.js','utf8');
 assert(app.includes('西交利物浦大学'));
 assert(!app.includes('indexedDB.open'),'Live records must not use browser IndexedDB');
 assert(!app.includes('seedProducts'),'Live UI must not silently load demo listings');
-for(const secretName of ['RESEND_API_KEY','JUZI_EMAIL_AUTH_SECRET','JUZI_EMAIL_RELAY_TOKEN','QQ_SMTP_AUTH_CODE','JUZI_RELAY_TOKEN']) assert(!app.includes(secretName),'Mail credentials belong only on the server');
+for(const secretName of ['RESEND_API_KEY','JUZI_EMAIL_AUTH_SECRET','JUZI_EMAIL_RELAY_TOKEN','QQ_SMTP_AUTH_CODE','JUZI_RELAY_TOKEN','JUZI_GMAIL_SCRIPT_SECRET']) assert(!app.includes(secretName),'Mail credentials belong only on the server');
 const metadata=await readFile('public/data.js','utf8');
 assert(!metadata.includes('seedProducts'),'Public metadata must not ship demo listings');
-for(const file of ['public/app.js','public/api.js','public/data.js','server/market.mjs','server/school-auth.mjs','relay/core.mjs','relay/http.mjs','relay/run.mjs','relay/runtime.mjs','scripts/migrate-local.mjs','scripts/setup-qq-mail.mjs','scripts/dev-local.mjs']) {
+for(const file of ['public/app.js','public/api.js','public/data.js','server/market.mjs','server/school-auth.mjs','relay/core.mjs','relay/http.mjs','relay/run.mjs','relay/runtime.mjs','scripts/migrate-local.mjs','scripts/setup-qq-mail.mjs','scripts/setup-gmail-mail.mjs','gmail-apps-script/Code.js','scripts/dev-local.mjs']) {
   const result=spawnSync(process.execPath,['--check',resolve(file)],{stdio:'inherit'});
   assert.equal(result.status,0,`Syntax failed: ${file}`);
 }

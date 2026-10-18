@@ -74,6 +74,17 @@ function relayUrl(value, origin) {
     return url.href;
   } catch { return null; }
 }
+function gmailScriptUrl(value) {
+  if (typeof value !== 'string') return null;
+  const raw = value.trim();
+  // Only the published Google web app endpoint is a credential destination.
+  return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{16,256}\/exec$/.test(raw) ? raw : null;
+}
+function gmailContentUrl(value) {
+  // ContentService responds with a one-time result URL. Never forward the POST
+  // or its signature to it, and never follow a Google sign-in redirect.
+  return typeof value === 'string' && !/[#\u0000-\u0020\u007F\\]/.test(value) && /^https:\/\/script\.googleusercontent\.com\/macros\/echo\?[^#\u0000-\u0020\u007F\\]{1,4096}$/.test(value) ? value : null;
+}
 function config(env, development = false) {
   const origin = originConfig(env, development), daily = String(env.JUZI_EMAIL_DAILY_LIMIT ?? '').trim() || '1000';
   if (env.JUZI_EMAIL_ENABLED !== 'true' || !origin ||
@@ -89,6 +100,11 @@ function config(env, development = false) {
     const url = relayUrl(env.JUZI_EMAIL_RELAY_URL, origin), token = env.JUZI_EMAIL_RELAY_TOKEN;
     if (!url || typeof token !== 'string' || token.length < 32 || token.length > 4096 || /[^\x21-\x7E]/.test(token)) return null;
     return { ...common, relayUrl: url, relayToken: token };
+  }
+  if (provider === 'gmail_apps_script') {
+    const url = gmailScriptUrl(env.JUZI_GMAIL_SCRIPT_URL), secret = env.JUZI_GMAIL_SCRIPT_SECRET;
+    if (!url || typeof secret !== 'string' || secret.length < 32 || secret.length > 4096 || /[^\x21-\x7E]/.test(secret)) return null;
+    return { ...common, gmailScriptUrl: url, gmailScriptSecret: secret };
   }
   return null;
 }
@@ -155,31 +171,55 @@ async function rateError(db, addressHash, bindingHash, dailyLimit, now) {
   if (Number(global.n) >= dailyLimit) fail(429, 'EMAIL_DAILY_LIMIT', '今日邮件发送额度已用完，请稍后再试。', 3600);
   fail(429, 'EMAIL_RATE_LIMIT', '请求过于频繁，请稍后再试。', 60);
 }
-async function deliver(cfg, email, code, challengeId, fetchImpl) {
-  const relay = cfg.provider === 'qq_relay';
-  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), relay ? 15000 : 5000);
+async function deliveryResult(response, limit = 16384, requireJson = false) {
+  if (!response.ok || response.redirected || response.status >= 300 && response.status < 400 || Number(response.headers.get('content-length')) > limit ||
+      requireJson && !/^application\/json(?:;|$)/i.test(response.headers.get('content-type') || '')) {
+    await response.body?.cancel(); throw new Error('Delivery failed');
+  }
+  const reader = response.body?.getReader(), chunks = []; let size = 0;
+  if (!reader) throw new Error('Delivery unconfirmed');
   try {
+    for (;;) {
+      const { done, value } = await reader.read(); if (done) break;
+      size += value.byteLength;
+      if (size > limit) { await reader.cancel(); throw new Error('Delivery response too large'); }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const bytes = new Uint8Array(size); let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+async function deliver(cfg, email, code, challengeId, fetchImpl) {
+  const relay = cfg.provider === 'qq_relay', gmail = cfg.provider === 'gmail_apps_script';
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), relay || gmail ? 15000 : 5000);
+  try {
+    if (gmail) {
+      const issuedAt = Math.floor(Date.now() / 1000);
+      const canonical = ['juzi-gmail-v1', challengeId, email, code, String(issuedAt)].join('\n');
+      const key = await crypto.subtle.importKey('raw', encoder.encode(cfg.gmailScriptSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const signature = [...new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(canonical)))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+      let response = await fetchImpl(cfg.gmailScriptUrl, {
+        method: 'POST', redirect: 'manual', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ version: 1, requestId: challengeId, email, code, issuedAt, signature }),
+      });
+      if (!response.redirected && (response.status === 302 || response.status === 303)) {
+        const target = gmailContentUrl(response.headers.get('location'));
+        await response.body?.cancel();
+        if (!target) throw new Error('Delivery redirect rejected');
+        response = await fetchImpl(target, { method: 'GET', redirect: 'manual', signal: controller.signal, headers: { Accept: 'application/json' } });
+      }
+      const result = await deliveryResult(response, 4096, true);
+      if (!result || result.ok !== true || result.id !== challengeId) throw new Error('Delivery unconfirmed');
+      return;
+    }
     const response = await fetchImpl(relay ? cfg.relayUrl : RESEND_ENDPOINT, {
       method: 'POST', redirect: 'manual', signal: controller.signal,
       headers: relay ? { Authorization: `Bearer ${cfg.relayToken}`, 'Content-Type': 'application/json' } : { Authorization: `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': challengeId },
       body: JSON.stringify(relay ? { requestId: challengeId, email, code } : { from: cfg.from, to: [email], subject: '橘子集 · 学校邮箱登录验证码', text: `你的橘子集登录验证码：${code}\n\n验证码 10 分钟内有效，请勿转发。如果不是你本人操作，请忽略此邮件。\n\n橘子集是校园闲置交易平台。本次仅验证你对学生邮箱的控制权，不验证在读学籍；这不是学校官方通知。` }),
     });
-    if (!response.ok || response.redirected || response.status >= 300 && response.status < 400 || Number(response.headers.get('content-length')) > 16384) {
-      await response.body?.cancel(); throw new Error('Delivery failed');
-    }
-    const reader = response.body?.getReader(), chunks = []; let size = 0;
-    if (!reader) throw new Error('Delivery unconfirmed');
-    try {
-      for (;;) {
-        const { done, value } = await reader.read(); if (done) break;
-        size += value.byteLength;
-        if (size > 16384) { await reader.cancel(); throw new Error('Delivery response too large'); }
-        chunks.push(value);
-      }
-    } finally { reader.releaseLock(); }
-    const bytes = new Uint8Array(size); let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    const result = JSON.parse(new TextDecoder().decode(bytes));
+    const result = await deliveryResult(response);
     if (typeof result.id !== 'string' || !result.id.trim() || result.id.length > 200) throw new Error('Delivery unconfirmed');
   } finally { clearTimeout(timer); }
 }
