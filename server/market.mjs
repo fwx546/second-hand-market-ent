@@ -1,3 +1,5 @@
+import { demoImages } from './demo-catalog.mjs';
+
 const CATEGORIES = ['appliance', 'ebike', 'daily'];
 const CAMPUSES = ['SIP 校区', '太仓校区'];
 const CONDITIONS = ['几乎全新', '九成新', '八成新'];
@@ -125,21 +127,23 @@ function productStatus(row) { return row.deleted_at !== null && row.deleted_at !
 function visible(row, viewer) { return row && (productStatus(row) === 'active' || row.owner_id === viewer?.userId); }
 function owned(row, viewer) {
   if (!row) fail(404, 'NOT_FOUND', '商品不存在。');
+  if (row.is_demo) fail(409, 'DEMO_PRODUCT', '这是示例商品，不能编辑、下架或删除。');
   if (row.owner_id !== viewer?.userId) fail(403, 'FORBIDDEN', '只能管理自己发布的商品。');
 }
 async function mediaIds(db, productId) {
   return (await all(db, 'SELECT media_id FROM product_media WHERE product_id = ? ORDER BY position', [productId])).map(row => row.media_id);
 }
 async function dto(db, row, viewer) {
-  const imageIds = await mediaIds(db, row.id);
-  const schoolAccount = await first(db, 'SELECT verified_at FROM school_email_accounts WHERE user_id = ?', [row.owner_id]);
+  const isDemo = Boolean(row.is_demo);
+  const imageIds = isDemo ? [] : await mediaIds(db, row.id);
+  const schoolAccount = isDemo ? null : await first(db, 'SELECT verified_at FROM school_email_accounts WHERE user_id = ?', [row.owner_id]);
   return {
     id: row.id, title: row.title, category: row.category, price: row.price_cents / 100, originalPrice: row.original_price_cents / 100,
     condition: row.condition, campus: row.campus, location: row.location, description: row.description,
     specs: JSON.parse(row.specs_json), graduation: Boolean(row.graduation), seller: row.seller, avatar: '🍊',
-    createdAt: row.created_at, status: productStatus(row), mine: row.owner_id === viewer?.userId,
+    createdAt: row.created_at, status: productStatus(row), mine: !isDemo && row.owner_id === viewer?.userId, isDemo,
     sellerEmailVerified: Boolean(schoolAccount?.verified_at),
-    images: imageIds.map(mediaId => `/api/media/${encodeURIComponent(mediaId)}`), imageIds,
+    images: isDemo ? demoImages(row.id) : imageIds.map(mediaId => `/api/media/${encodeURIComponent(mediaId)}`), imageIds,
   };
 }
 async function dtos(db, rows, viewer) { return Promise.all(rows.map(row => dto(db, row, viewer))); }
@@ -188,14 +192,14 @@ async function listProducts(db, search, viewer) {
     if (value === '1') where.push(clause);
   }
   const clause = where.join(' AND '), order = sort === 'price-asc' ? 'price_cents ASC' : sort === 'price-desc' ? 'price_cents DESC' : 'created_at DESC';
-  const count = await first(db, `SELECT count(*) AS total FROM products WHERE ${clause}`, values);
+  const count = await first(db, `SELECT count(*) AS total, COALESCE(sum(CASE WHEN is_demo = 1 THEN 1 ELSE 0 END), 0) AS demo_total FROM products WHERE ${clause}`, values);
   const rows = await all(db, `SELECT * FROM products WHERE ${clause} ORDER BY ${order}, id DESC LIMIT ? OFFSET ?`, [...values, pageSize, (page - 1) * pageSize]);
   const categoryCounts = { all: 0, appliance: 0, ebike: 0, daily: 0 };
   for (const group of await all(db, "SELECT category, count(*) AS total FROM products WHERE status = 'active' AND sold_at IS NULL AND deleted_at IS NULL GROUP BY category")) {
     categoryCounts[group.category] = Number(group.total); categoryCounts.all += Number(group.total);
   }
-  const total = Number(count.total);
-  return json({ items: await dtos(db, rows, viewer), total, categoryCounts, page, pageSize, hasMore: page * pageSize < total });
+  const total = Number(count.total), demoTotal = Number(count.demo_total);
+  return json({ items: await dtos(db, rows, viewer), total, realTotal: total - demoTotal, demoTotal, categoryCounts, page, pageSize, hasMore: page * pageSize < total });
 }
 async function assertImagesOwned(db, imageIds, userId) {
   const rows = await all(db, `SELECT id FROM media WHERE owner_id = ? AND id IN (${imageIds.map(() => '?').join(',')})`, [userId, ...imageIds]);
@@ -398,6 +402,7 @@ export async function handleMarket(request, env, viewer = null, { development = 
         requireViewer(viewer);
         const row = await productRow(db, productId);
         if (!visible(row, viewer)) fail(404, 'NOT_FOUND', '商品不存在或已下架。');
+        if (row.is_demo) fail(409, 'DEMO_PRODUCT', '这是虚构的示例商品，没有真实卖家或联系方式。');
         const contact = await first(db, 'SELECT type, value FROM private_contacts WHERE product_id = ?', [productId]);
         if (!contact) fail(404, 'NOT_FOUND', '卖家联系方式暂不可用。');
         return json(contact);

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { A, B, PNG, SQLiteD1, MemoryBucket, fixture, api, productInput, publish, upload } from './support.mjs';
 
-test('empty production database; identity never publishes account email or full name', async t => {
+test('empty schema fixture; identity never publishes account email or full name', async t => {
   const env = fixture(t);
   const catalog = await api(env, '/api/products');
   assert.equal(catalog.status, 200);

@@ -175,6 +175,12 @@ main.container { min-height: 60vh; padding-top: 28px; padding-bottom: 64px; }
 .favorite-button.active svg, .favorite-button[aria-pressed="true"] svg { fill: currentColor; }
 .product-body { padding: 12px 12px 11px; display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .card-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
+.demo-product-tag { display: inline-flex; align-items: center; width: fit-content; padding: 2px 6px; border-radius: 5px; background: #fff1bd; color: #6d4c15; font-size: 10px; font-weight: 700; line-height: 1.7; }
+.detail-tags .demo-product-tag { font-size: 11px; padding: 3px 9px; border-radius: 6px; }
+.catalog-counts { display: block; margin-top: 5px; color: #74614d; font-size: 11px; line-height: 1.7; }
+.demo-catalog-notice { margin: 0 0 17px; padding: 10px 13px; border: 1px solid #eadfbc; border-radius: 10px; background: #fff9e7; color: #6d5838; font-size: 11px; line-height: 1.8; }
+.demo-product-notice { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 12px; margin: 0 0 22px; padding: 13px 16px; border: 1px solid #eadfbc; border-radius: 12px; background: #fff7d9; color: #6d4c15; font-size: 12px; line-height: 1.8; }
+.demo-product-notice strong { font-weight: 700; }
 .condition-tag { display: inline-flex; border-radius: 4px; padding: 1px 5px; font-size: 9px; font-weight: 500; background: #f2f5e8; color: #78845a; line-height: 1.7; }
 .condition-tag.orange { background: #fff0e5; color: #bc855b; }
 .product-title, .product-body h3, .product-body > a > h3 { font-size: 12px; line-height: 1.6; margin: 0 0 8px; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

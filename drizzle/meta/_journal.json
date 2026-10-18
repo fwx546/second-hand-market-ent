@@ -29,6 +29,13 @@
       "when": 1792323596177,
       "tag": "0003_sloppy_ulik",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792328752076,
+      "tag": "0004_public_demo_catalog",
+      "breakpoints": true
     }
   ]
 }

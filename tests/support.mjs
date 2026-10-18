@@ -19,7 +19,7 @@ class D1Statement {
 }
 
 export class SQLiteD1 {
-  constructor(filename = ':memory:', migrate = true) {
+  constructor(filename = ':memory:', migrate = true, { includeDemo = false } = {}) {
     this.sqlite = new DatabaseSync(filename);
     this.batchQueue = Promise.resolve();
     this.sqlite.exec('PRAGMA foreign_keys = ON');
@@ -27,7 +27,15 @@ export class SQLiteD1 {
       const folder = new URL('../drizzle/', import.meta.url);
       const migrations = readdirSync(folder).filter(name => name.endsWith('.sql')).sort();
       if (!migrations.length) throw new Error('Generate the real migration first with npm run db:generate.');
-      for (const file of migrations) this.sqlite.exec(readFileSync(new URL(file, folder), 'utf8'));
+      for (const file of migrations) {
+        const sql = readFileSync(new URL(file, folder), 'utf8');
+        // Existing unit tests isolate their own records. Dedicated demo tests run
+        // the complete production migration, including the explicit seed data.
+        const statements = file === '0004_public_demo_catalog.sql' && !includeDemo
+          ? sql.split('--> statement-breakpoint').filter(part => !/^\s*INSERT OR IGNORE INTO\b/i.test(part)).join('\n')
+          : sql;
+        this.sqlite.exec(statements);
+      }
     }
   }
   prepare(sql) { return new D1Statement(this.sqlite, sql); }
@@ -58,7 +66,7 @@ export class MemoryBucket {
 }
 
 export function fixture(t, options = {}) {
-  const env = { DB: new SQLiteD1(options.filename, options.migrate), BUCKET: options.bucket || new MemoryBucket() };
+  const env = { DB: new SQLiteD1(options.filename, options.migrate, { includeDemo: options.includeDemo }), BUCKET: options.bucket || new MemoryBucket() };
   t.after(() => env.DB.close());
   return env;
 }
