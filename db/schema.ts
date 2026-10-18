@@ -93,3 +93,31 @@ export const authSessions = sqliteTable("auth_sessions", {
   index("auth_sessions_expiry").on(table.expiresAt),
   index("auth_sessions_user").on(table.userId),
 ]);
+
+// Verifies control of a student mailbox, not current enrollment or a school endorsement.
+export const schoolEmailAccounts = sqliteTable("school_email_accounts", {
+  emailHash: text("email_hash").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  emailMasked: text("email_masked").notNull(),
+  verifiedAt: integer("verified_at").notNull(),
+}, (table) => [uniqueIndex("school_email_accounts_user").on(table.userId)]);
+
+// Keep every send reservation (including failures) for 24 hours to enforce delivery budgets.
+export const schoolEmailChallenges = sqliteTable("school_email_challenges", {
+  id: text("id").primaryKey(),
+  emailHash: text("email_hash").notNull(),
+  bindingHash: text("binding_hash").notNull(),
+  codeHash: text("code_hash").notNull(),
+  emailMasked: text("email_masked").notNull(),
+  createdAt: integer("created_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  consumedAt: integer("consumed_at"),
+  deliveryStatus: text("delivery_status").notNull().default("pending"),
+}, (table) => [
+  index("school_challenges_email_created").on(table.emailHash, table.createdAt),
+  index("school_challenges_browser_created").on(table.bindingHash, table.createdAt),
+  index("school_challenges_created").on(table.createdAt),
+  check("school_challenges_attempts", sql`${table.attempts} >= 0 AND ${table.attempts} <= 5`),
+  check("school_challenges_delivery", sql`${table.deliveryStatus} IN ('pending', 'sent', 'failed')`),
+]);

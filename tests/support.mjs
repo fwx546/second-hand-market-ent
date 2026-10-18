@@ -3,8 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { handleMarket } from '../server/market.mjs';
 
 export const ORIGIN = 'https://juzi.example';
-export const A = { userId: 'platform-user-A' };
-export const B = { userId: 'platform-user-B' };
+export const A = { userId: 'school-user-A', provider: 'school_email', emailVerified: true, emailMasked: 'a***1@student.xjtlu.edu.cn' };
+export const B = { userId: 'school-user-B', provider: 'school_email', emailVerified: true, emailMasked: 'b***2@student.xjtlu.edu.cn' };
 export const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHKkAAAAASUVORK5CYII=', 'base64');
 
 class D1Statement {

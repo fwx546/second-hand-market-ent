@@ -28,7 +28,6 @@
                          "drizzle-orm":  "0.45.2",
                          "embla-carousel-react":  "^8.6.0",
                          "input-otp":  "^1.4.2",
-                         "jose":  "6.2.12",
                          "lucide-react":  "^1.31.0",
                          "next":  "16.3.4",
                          "next-themes":  "^0.4.6",
@@ -72,5 +71,5 @@
                                         "sharp":  "0.35.4"
                                     }
                   },
-    "description":  "西交利物浦大学校园二手交易平台，Sites D1/R2 与 ChatGPT 登录"
+    "description":  "西交利物浦大学校园二手交易平台，Sites D1/R2、学校邮箱验证码与访客浏览"
 }

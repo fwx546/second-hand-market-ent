@@ -17,9 +17,12 @@ test('empty production database; identity never publishes account email or full 
   assert.equal(anonymous.data.development, false);
   assert.equal(anonymous.data.capabilities.canPublish, false);
   const loggedIn = await api(env, '/api/me', { viewer: { ...A, email: 'private@school.edu', displayName: 'PRIVATE_FULL_NAME' } });
-  assert.deepEqual(loggedIn.data.user, { id: A.userId, displayName: '橘子同学', schoolVerified: false });
+  assert.deepEqual(loggedIn.data.user, { id: A.userId, displayName: '橘子同学', schoolVerified: false, emailVerified: true, emailMasked: A.emailMasked });
   assert.equal(loggedIn.data.capabilities.canPublish, true);
-  assert(loggedIn.data.signInUrl.startsWith('/signin-with-chatgpt?'));
+  assert.equal(loggedIn.data.signInUrl, '/#/login');
+  assert.equal(loggedIn.data.authentication.provider, 'school_email');
+  assert.equal((await api(env, '/api/me', { viewer: { userId: A.userId, provider: 'chatgpt' } })).data.user, null);
+  assert.equal((await api(env, '/api/me', { viewer: { userId: A.userId, provider: 'external' } })).data.user, null);
   assert.equal(loggedIn.response.headers.get('cache-control'), 'no-store');
   assert(!JSON.stringify(loggedIn.data).includes('private@'));
   assert.equal(env.DB.sqlite.prepare('SELECT count(*) AS n FROM users').get().n, 0);
@@ -63,7 +66,7 @@ test('public DTO excludes all private data; authenticated contact is a separate 
   assert.equal(row.price_cents, 3525);
   for (const result of [created, detail, await api(env, '/api/products'), await api(env, '/api/me/products', { viewer: A }), await api(env, '/api/me/favorites', { viewer: B })]) {
     const serialized = JSON.stringify(result.data);
-    for (const forbidden of ['contactValue', 'contactType', 'ownerId', 'owner_id', 'juzi_test_contact', 'platform-user-A', 'email']) assert(!serialized.includes(forbidden), forbidden);
+    for (const forbidden of ['contactValue', 'contactType', 'ownerId', 'owner_id', 'juzi_test_contact', A.userId, B.userId, 'email']) assert(!serialized.includes(forbidden), forbidden);
     assert.equal(result.response.headers.get('cache-control'), 'no-store');
   }
   const contact = await api(env, `/api/products/${productId}/contact`, { viewer: B });

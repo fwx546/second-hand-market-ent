@@ -131,11 +131,13 @@ async function mediaIds(db, productId) {
 }
 async function dto(db, row, viewer) {
   const imageIds = await mediaIds(db, row.id);
+  const schoolAccount = await first(db, 'SELECT verified_at FROM school_email_accounts WHERE user_id = ?', [row.owner_id]);
   return {
     id: row.id, title: row.title, category: row.category, price: row.price_cents / 100, originalPrice: row.original_price_cents / 100,
     condition: row.condition, campus: row.campus, location: row.location, description: row.description,
     specs: JSON.parse(row.specs_json), graduation: Boolean(row.graduation), seller: row.seller, avatar: '🍊',
     createdAt: row.created_at, status: row.status, mine: row.owner_id === viewer?.userId,
+    sellerEmailVerified: Boolean(schoolAccount?.verified_at),
     images: imageIds.map(mediaId => `/api/media/${encodeURIComponent(mediaId)}`), imageIds,
   };
 }
@@ -303,11 +305,13 @@ async function getMedia(env, db, mediaId, viewer) {
  * Verified identity is supplied only by the trusted route wrapper, never request JSON/headers.
  * @param {Request} request
  * @param {{DB?: any, BUCKET?: any}} env
- * @param {{userId: string, provider?: string}|null} viewer
+ * @param {{userId: string, provider?: string, emailVerified?: boolean, emailMasked?: string}|null} viewer
  * @param {{development?: boolean, authentication?: object}} [options]
  */
 export async function handleMarket(request, env, viewer = null, { development = false, authentication } = {}) {
   try {
+    // Platform/OIDC identities and guest selections are not school-email authentication.
+    if (viewer?.provider !== 'school_email' || viewer?.emailVerified !== true) viewer = null;
     const method = request.method.toUpperCase(), url = new URL(request.url);
     if (!['GET', 'POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) fail(405, 'METHOD_NOT_ALLOWED', '此请求方式不受支持。');
     if (method !== 'GET') { requireViewer(viewer); requireOrigin(request); }
@@ -317,12 +321,12 @@ export async function handleMarket(request, env, viewer = null, { development = 
       const stored = viewer ? await first(db, 'SELECT display_name FROM users WHERE id = ?', [viewer.userId]) : null;
       return json({
         development: development === true,
-        user: viewer ? { id: viewer.userId, displayName: stored?.display_name || '橘子同学', schoolVerified: false } : null,
-        signInUrl: '/signin-with-chatgpt?return_to=%2F%23%2F', signOutUrl: '/signout-with-chatgpt?return_to=%2F%23%2F',
+        user: viewer ? { id: viewer.userId, displayName: stored?.display_name || '橘子同学', schoolVerified: false, emailVerified: true, emailMasked: viewer.emailMasked || null } : null,
+        signInUrl: '/#/login', signOutUrl: '/api/auth/logout',
         authentication: authentication || {
-          provider: viewer ? (viewer.provider === 'external' ? 'external' : 'chatgpt') : null,
-          external: { configured: false, methods: { phone: false, wechat: false }, startUrl: '/api/auth/start' },
-          platform: { enabled: true, signInUrl: '/signin-with-chatgpt?return_to=%2F%23%2F', signOutUrl: '/signout-with-chatgpt?return_to=%2F' },
+          provider: viewer ? 'school_email' : 'guest',
+          email: { configured: false, domain: 'student.xjtlu.edu.cn', sendUrl: '/api/auth/email/send', verifyUrl: '/api/auth/email/verify' },
+          guest: { enabled: true, startUrl: '/api/auth/guest' },
         },
         capabilities: { canPublish: Boolean(viewer), canViewContact: Boolean(viewer), canFavorite: Boolean(viewer), schoolVerificationRequired: false },
       });

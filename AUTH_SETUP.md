@@ -1,87 +1,96 @@
-# 配置手机号与微信登录
+# 配置学校邮箱验证码登录
 
-本站保留 ChatGPT 登录，并提供可配置的外部 OIDC 登录接入。没有认证服务账号时，手机号和微信入口默认显示“尚未开通”。本站不接收手机验证码、不发送短信，也不模拟真实微信授权。真实服务尚未开通，短信发送、微信授权以及 Sites 上的真实回调仍待验收。
+本站提供“学校邮箱验证码登录”和“访客浏览”两个入口。学校邮箱必须完整匹配 `student.xjtlu.edu.cn`；验证码验证的是该邮箱的控制权，**不代表核实当前在读学籍、校方背书或实际所在校区**。
 
-外部登录使用 **Authorization Code + PKCE（S256）**，通过一个入口前往服务商托管的登录页，由用户在那里选择手机号或微信。下面以 Authing 为例；其他服务必须提供兼容的 OIDC Discovery、授权、令牌与 JWKS 端点。
+目前没有配置邮件服务，真实收信尚未验收。邮箱登录默认关闭，不返回假验证码，不提供模拟业务账号；访客仍可搜索和查看公开商品。发布、收藏、联系方式和个人记录需要学校邮箱登录。选择访客会通过本站 POST 接口清除当前会话，再确认已进入只读状态。
 
-## 1. 准备认证服务
+## 1. 准备 Resend 与自有发件域名
 
-由维护者注册 Authing 账号、创建用户池和 OIDC 应用。在应用控制台记录实际的 Issuer、Client ID；需要密钥认证时再获取 Client Secret。不要把密钥发到聊天、GitHub 或截图中。
+维护者注册 Resend，添加并验证自己拥有、能够配置 DNS 的域名或子域，按控制台提供的记录完成验证，再创建仅保存在服务端的 API Key。无需 Authing、SMTP 服务器或学校邮件服务器授权。
 
-在应用协议配置中：
+**发件域与收件域不同：**本站只限制收件人为学校邮箱。发件人必须使用维护者自有、已验证的域名；没有校方授权和对应域名控制权，不能填写学校邮箱冒充校方。Sites 分配的网址也不等于你拥有该域名的发信权限。Resend 的域名要求见[官方发件域验证说明](https://resend.com/docs/dashboard/domains/introduction)。
 
-- 开启授权码模式，返回类型选 `code`，支持 S256 PKCE。
-- **ID Token 签名算法选 RS256。本站不支持 HS256。**
-- Token 端点认证方式与本站的 `JUZI_AUTH_TOKEN_AUTH_METHOD` 保持一致：`none`、`client_secret_post` 或 `client_secret_basic`。使用后两者时需要服务端 Client Secret；本站默认 `none`。
-- 允许请求 `openid`。本站只请求此 scope，不需要手机号、邮箱或微信档案字段。
+服务端固定调用 Resend 的 `POST https://api.resend.com/emails`，使用 Bearer API Key，提交发件人、收件人、主题和纯文本验证码邮件。API 返回邮件 ID 只表示服务商接受发送，**不保证已进入学校收件箱**。接口合同见[官方发送邮件说明](https://resend.com/docs/api-reference/emails/send-email)。
 
-Authing 的 Issuer 通常形如 `https://<应用域名>.authing.cn/oidc`，以控制台显示为准。本站从 `{issuer}/.well-known/openid-configuration` 读取真实端点，不把文档示例域名作为运行配置。参见 [官方 PKCE 与 Discovery 指南](https://docs.authing.cn/v2/apn/more-oidc-tests/type2.html)、[Token 端点认证方式](https://docs.authing.cn/v2/reference/sdk-for-node/authentication/StandardProtocol.html)和 [RS256 / JWKS 验证说明](https://docs.authing.cn/v2/guides/faqs/how-to-validate-user-token.html)。
+## 2. 配置服务端环境变量
 
-## 2. 配置精确回调地址
-
-将实际环境的以下地址加入应用的登录回调白名单：
-
-| 环境 | `JUZI_AUTH_ORIGIN` | 登录回调地址 |
-| --- | --- | --- |
-| 默认本地预览 | `http://localhost:5173` | `http://localhost:5173/api/auth/callback` |
-| 本地 4174 端口 | `http://localhost:4174` | `http://localhost:4174/api/auth/callback` |
-| 当前生产站点 | `https://juzi-campus-market.open-bloom-6517.chatgpt.site` | `https://juzi-campus-market.open-bloom-6517.chatgpt.site/api/auth/callback` |
-
-Origin 不含末尾斜线。访问时的协议、主机和端口必须一致；`localhost` 与 `127.0.0.1` 不能混用。**使用 `/api/auth/callback`，不要替换或配置 Sites 平台自己的 `/callback`。** 更换域名或端口后，要同步修改服务商白名单和本站 Origin。
-
-## 3. 在托管登录页开通登录方式
-
-在 Authing 应用的“登录控制”中启用“手机号 + 验证码”，并创建、添加适合网页场景的微信社会化身份源。资质材料、短信签名与模板、微信应用授权、费用及审核由维护者在对应服务商控制台办理，以实际审核结果为准。本站的配置开关不会替你开通这些服务。
-
-两种方式在同一个托管登录页展示。不要给本站添加未经服务商文档确认的登录方式选择参数。配置方法见 [Authing 托管登录控制](https://docs.authing.cn/v2/guides/app-new/create-app/login-control.html)。
-
-## 4. 注入本站配置
-
-本地在仓库根目录复制样例：
+在仓库根目录复制空白样例：
 
 ```powershell
 Copy-Item -LiteralPath .env.example -Destination .env.local
 ```
 
-编辑 `.env.local`，填写实际值：
+编辑 `.env.local`：
 
-| 变量 | 内容 |
+| 变量 | 填写内容 |
 | --- | --- |
-| `JUZI_AUTH_ISSUER` | 服务商控制台显示的 OIDC Issuer |
-| `JUZI_AUTH_CLIENT_ID` | OIDC 应用 Client ID |
-| `JUZI_AUTH_TOKEN_AUTH_METHOD` | 与控制台一致的 `none` / `client_secret_post` / `client_secret_basic` |
-| `JUZI_AUTH_CLIENT_SECRET` | 仅后两种认证方式需要，作为服务端密钥保存 |
-| `JUZI_AUTH_ORIGIN` | 上表中实际使用的站点 Origin |
-| `JUZI_AUTH_PHONE_ENABLED` | 托管页手机号登录已开通后设为 `true` |
-| `JUZI_AUTH_WECHAT_ENABLED` | 托管页微信登录已开通后设为 `true` |
+| `JUZI_EMAIL_ENABLED` | 全部配置完成后改为 `true`；默认 `false` |
+| `JUZI_EMAIL_ORIGIN` | 实际访问的站点 Origin，无末尾斜线 |
+| `JUZI_EMAIL_FROM` | 自有已验证域名下的发件地址，可使用 `显示名称 <地址>` 格式 |
+| `RESEND_API_KEY` | Resend API Key，只供服务端调用 |
+| `JUZI_EMAIL_AUTH_SECRET` | 至少 32 字符的高熵 HMAC 密钥，不能使用口令或示例值 |
+| `JUZI_EMAIL_DAILY_LIMIT` | 可选整数 `1..10000`，留空默认 `1000` 次/滚动 24 小时，失败发送也计数 |
 
-本地 Cloudflare 开发环境会读取 `.env.local` 并提供给 Worker；如果存在 `.dev.vars`，它会优先于 `.env*`，不要同时维护两套不同配置。详见 [Cloudflare 本地环境变量说明](https://developers.cloudflare.com/workers/local-development/environment-variables/)。
-
-生产通过具有项目权限的 Sites 环境设置工具或界面注入这些变量，密钥使用服务端秘密值；不要写进源码、`public/`、构建产物或 `.openai/hosting.json`，也不要添加 `VITE_` / `NEXT_PUBLIC_` 前缀。`.env.local` 已被 Git 忽略，只有空白的 `.env.example` 可提交。
-
-首次使用或更新迁移后运行：
+可在自己的终端生成高熵密钥，直接填入私有配置；不要把真实输出复制到聊天、提交记录或日志：
 
 ```powershell
+node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Origin 与实际协议、主机和端口必须一致：
+
+| 环境 | `JUZI_EMAIL_ORIGIN` |
+| --- | --- |
+| 默认本地预览 | `http://localhost:5173` |
+| 本地 4174 端口 | `http://localhost:4174` |
+| 当前生产站点 | `https://juzi-campus-market.open-bloom-6517.chatgpt.site` |
+
+本地 HTTP 仅限开发模式的 `localhost`。不要混用 `localhost` 与 `127.0.0.1`。本方案没有外部授权回调，不需要修改 Sites 宿主的认证路径；宿主身份不授予本应用交易权限。
+
+本地 Cloudflare 开发环境会将 `.env.local` 提供给 Worker；如果存在 `.dev.vars`，它会优先于 `.env*`，不要同时维护两套不同配置。见[Cloudflare 本地环境变量说明](https://developers.cloudflare.com/workers/local-development/environment-variables/)。
+
+生产由具有项目权限的维护者通过 Sites 环境设置工具或界面注入同名变量，API Key 和 HMAC 密钥使用服务端秘密值。不要写入源码、`public/`、构建产物、托管清单或截图，也不要添加 `VITE_` / `NEXT_PUBLIC_` 前缀。`.env.local`、`.dev.vars*` 已被 Git 忽略，只有空白的 `.env.example` 可提交。
+
+首次启动或更新迁移后运行：
+
+```powershell
+npm ci
 npm run build
 npm run db:migrate
 npm run dev
 ```
 
-使用 4174 端口时将最后一行改为 `npm run dev -- --port 4174`。本地迁移仅应用于本地 D1；生产新增迁移由 Sites 发布流程应用。迁移不导入真实账号或演示商品。修改配置后重启开发服务。
+4174 端口使用 `npm run dev -- --port 4174`。修改配置后重启服务。本地迁移只操作本地 D1；生产迁移由 Sites 发布流程应用。新增认证表不导入真实邮箱或演示商品，原有商品、收藏及迁移历史均保留。
 
-## 5. 实际验收
+## 3. 验证码、会话与限流
 
-先确认登录页显示正确开通状态；未配置时应显示“尚未开通”，后端应拒绝发起外部授权。开通后使用真实账号依次验证：
+用户在本站输入学校邮箱，申请邮件后填写 6 位验证码。邮箱去除首尾空白、统一小写，必须完整匹配学校收件域；相似后缀、子域和其他邮箱不接受。
 
-1. 从本站进入托管页，分别完成大陆手机号验证码和微信授权，再回到本站。
-2. 登录后发布、收藏和读取联系方式；刷新后会话保持，同一账号在另一个浏览器能看到自己的记录。
-3. 换另一个账号，确认不能编辑、下架对方商品，不能读取对方未发布照片。
-4. 退出登录后，确认不能继续读取联系方式或管理商品。异常、过期或重复回调不能获得登录状态。
+验证码 10 分钟有效，每次挑战最多尝试 5 次，绑定发起请求的浏览器，成功后只能使用一次。数据库只保存验证码的 HMAC 摘要；验证码仅在发出的邮件中提供，不在接口响应或日志显示。
 
-站内会话固定 7 天，到期需重新授权，不按访问时间滑动延长；每次授权流程有效 10 分钟且只能完成一次。会话 Cookie 使用 `HttpOnly` 和 `SameSite=Lax`。本站退出会清除外部本站会话，再走 Sites 平台登出以清除 ChatGPT 身份；**不主动注销认证服务商的 SSO 会话**，下次授权可能无需重新输入验证码。
+发送限制按滚动 24 小时计算，失败发送也计数：
 
-外部用户按 Issuer + `sub` 稳定关联站内记录，不会凭手机号、邮箱或昵称自动合并旧 ChatGPT 账号。手机号和微信如需共用记录，应在同一认证服务内绑定到同一用户；切换到未绑定的身份可能进入另一个账号。本站不验证学生身份。
+- 同一邮箱两次请求间隔至少 60 秒，最多 10 次。
+- 同一浏览器最多 20 次。
+- 全站默认最多 1000 次，可通过 `JUZI_EMAIL_DAILY_LIMIT` 调整。
 
-本站不保存外部 ID Token、Access Token、登录手机号或微信档案。用户在商品发布表单中另行填写的交易联系方式仍按 [PRIVACY.md](PRIVACY.md) 保存和展示。
+挑战记录保留用于 24 小时限流，由后续认证请求清理；验证码失效后不可使用，不承诺在失效瞬间自动删除数据库记录。登录会话固定 7 天，不按访问时间滑动延长；Cookie 使用 `HttpOnly`、`SameSite=Lax`，生产使用 `Secure`。
 
-服务商的真实账号、短信和微信尚未配置时，协议测试不代表上述真实链路已通过。外部登录也不保证解除现有 Cloudflare 访问拦截；生产可访问性、Cookie 与回调兼容性需分别验收并记录。
+浏览器还会保留一个 24 小时的 `HttpOnly` 验证码绑定 Cookie，用于浏览器绑定和发送限流。退出或选择访客只清登录会话，不清除此绑定 Cookie，避免反复切换访客重置额度；它不创建访客账号，也不授予交易权限。
+
+本站持久层不保存完整登录邮箱，只保存标准化邮箱的 SHA-256 私有关联、随机站内账号 ID、掩码和验证时间。哈希是关联标识，不是邮箱加密，也不承诺匿名化。邮件服务商会接收完整收件邮箱和验证码邮件，具体处理规则应查看其服务说明。交易联系方式由卖家另行填写，范围见 [PRIVACY.md](PRIVACY.md)。
+
+## 4. 实际验收
+
+开通前应确认邮箱入口明确显示“邮件服务尚未开通”，请求不会假装发送成功；访客不能通过直接调用接口绕过发布、收藏和联系方式限制。本地宿主提供的开发模拟身份也不能替代邮箱验证。
+
+配置后用维护者自己控制的真实学校邮箱逐项验收：
+
+1. 正确邮箱能收到邮件并完成登录；检查垃圾邮件及收件策略。仅有服务商邮件 ID 不算送达验收。
+2. 错误、过期、重复使用或另一浏览器的验证码无法登录；冷却和发送额度正常。
+3. 登录后可上传非私人测试照片、发布、编辑、收藏和读取联系方式。同一邮箱在另一浏览器验证后能读取自己的记录，其他邮箱不能管理这些商品。
+4. 点击退出或访客浏览后，当前本站会话失效；页面重新确认匿名状态，发布、收藏、个人记录和联系方式不可用。
+
+原有记录不会清空，也不会按邮箱、昵称或联系方式自动归并到新账号。旧身份的历史会话不获得邮箱登录权限；需要迁移原有归属时，另行核对和制定操作方案。
+
+真实邮件服务未配置时，受控测试不能记为真实收信已通过。Cloudflare 访问拦截仍是独立问题；本站能否公开访问、学校收件箱送达和 Sites 生产会话必须分别验收，不能用本地成功替代。

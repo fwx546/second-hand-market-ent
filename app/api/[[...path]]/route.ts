@@ -1,25 +1,22 @@
 /// <reference types="vite/client" />
 import { env } from "cloudflare:workers";
-import { chatGPTSignInPath, chatGPTSignOutPath, getChatGPTUser } from "../../chatgpt-auth";
 import { handleMarket } from "../../../server/market.mjs";
-import { getExternalAuthConfig, handleExternalAuth, resolveExternalViewer } from "../../../server/external-auth.mjs";
+import { getSchoolAuthConfig, handleSchoolAuth, resolveSchoolViewer } from "../../../server/school-auth.mjs";
 
 export const dynamic = "force-dynamic";
 
 async function route(request: Request) {
   const development = import.meta.env.DEV;
-  const authResponse = await handleExternalAuth(request, env, { development });
+  const authResponse = await handleSchoolAuth(request, env, { development });
   if (authResponse) return authResponse;
-  const external = await resolveExternalViewer(request, env, { development });
-  const user = external ? null : await getChatGPTUser();
-  const viewer = external || (user ? { userId: user.userId } : null);
-  // Never forward account email/full name into public seller data.
+  // Host ChatGPT/Seedy identity and retired OIDC cookies never grant school-email permissions.
+  const viewer = await resolveSchoolViewer(request, env, { development });
   return handleMarket(request, env, viewer, {
     development,
     authentication: {
-      provider: external ? "external" : user ? "chatgpt" : null,
-      external: getExternalAuthConfig(env, { development }),
-      platform: { enabled: true, signInUrl: chatGPTSignInPath("/#/"), signOutUrl: chatGPTSignOutPath("/") },
+      provider: viewer ? "school_email" : "guest",
+      email: getSchoolAuthConfig(env, { development }),
+      guest: { enabled: true, startUrl: "/api/auth/guest" },
     },
   });
 }

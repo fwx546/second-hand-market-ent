@@ -1127,6 +1127,66 @@ button:disabled { transform: none !important; }
   .login-platform > .button { min-width: 225px; }
 }
 
+.school-login-page { max-width: 950px; }
+.school-login-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 21px; align-items: start; }
+.school-login-layout .login-panel { padding: 28px; }
+.email-panel-copy { color: #88765e; font-size: 12px; line-height: 1.9; margin: -9px 0 20px; }
+.email-panel-copy strong { color: #8b622e; font-size: 11px; overflow-wrap: anywhere; }
+.email-unavailable { padding: 13px 15px; margin-bottom: 20px; background: #fff6da; border: 1px solid #efdfae; color: #8a6a32; border-radius: 10px; font-size: 11px; line-height: 1.9; }
+#school-login-form { display: flex; flex-direction: column; gap: 17px; }
+#school-login-form input { font-size: 13px; }
+#school-login-form .field-hint { color: #907b62; font-size: 10px; }
+#school-login-form input:disabled { background: #f6f3ed; color: #a3927d; cursor: not-allowed; }
+.email-send-button { align-self: flex-start; min-height: 38px; padding: 8px 15px; font-size: 11px; margin-top: -4px; }
+#school-code { letter-spacing: .36em; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 19px !important; }
+#school-code::placeholder { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; letter-spacing: 0; font-size: 12px; }
+#verify-email-button { width: 100%; }
+#email-feedback:empty { display: none; }
+.email-error, .email-success { margin: 0; padding: 11px 13px; border-radius: 9px; font-size: 11px; line-height: 1.9; overflow-wrap: anywhere; }
+.email-error { color: #a33f24; background: #fff1e9; border: 1px solid #f1d3bf; }
+.email-success { color: #55723f; background: #eff5e7; border: 1px solid #dce8cd; }
+.email-error + .email-success { margin-top: 8px; }
+.guest-login-panel { background: #f4f7ec; border-color: #e3e9d4; box-shadow: none; }
+.guest-illustration { display: grid; place-items: center; width: 65px; height: 65px; border-radius: 21px; background: #e7eddb; font-size: 36px; margin-bottom: 22px; }
+.guest-login-panel > h2 { font-size: 21px; margin: 0 0 11px; }
+.guest-login-panel > p { color: #7f8d6b; font-size: 12px; line-height: 1.9; margin-bottom: 17px; }
+.guest-login-panel > ul { padding: 0 0 0 17px; margin: 0 0 25px; font-size: 11px; line-height: 2.1; color: #7c886d; }
+.guest-login-panel li + li { margin-top: 5px; }
+.guest-login-panel > .button { width: 100%; font-size: 12px; border-color: #d4ddc3; background: #fffef9; }
+.guest-login-panel > .guest-account-note { padding: 10px 12px; background: #e9efdf; border-radius: 9px; font-size: 10px; color: #6f8158; }
+.guest-login-panel > .email-error { margin-bottom: 15px; color: #a33f24; }
+.profile-summary .profile-masked-email { color: #8d7147; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .school-login-layout { grid-template-columns: 1fr; gap: 17px; }
+  .school-login-layout .login-panel { padding: 22px 19px; }
+  .email-panel-copy { font-size: 11px; margin-top: -6px; margin-bottom: 17px; }
+  .email-panel-copy strong { font-size: 10px; }
+  .email-unavailable { padding: 11px 12px; margin-bottom: 18px; font-size: 10px; }
+  #school-login-form { gap: 16px; }
+  #school-login-form input { font-size: 16px; padding: 12px; }
+  #school-login-form .field-hint { font-size: 10px; line-height: 1.9; }
+  #school-email { letter-spacing: -.3px; }
+  #school-email::placeholder { font-size: 11px; letter-spacing: -.25px; }
+  #school-code { font-size: 19px !important; }
+  .email-send-button { font-size: 11px; min-height: 38px; padding: 8px 13px; }
+  #verify-email-button { min-height: 43px; font-size: 12px; }
+  .email-error, .email-success { font-size: 10px; padding: 10px 11px; }
+  .guest-login-panel { position: relative; }
+  .guest-illustration { width: 48px; height: 48px; border-radius: 15px; font-size: 29px; margin-bottom: 17px; }
+  .guest-login-panel > h2 { font-size: 19px; margin-bottom: 8px; }
+  .guest-login-panel > p { font-size: 11px; }
+  .guest-login-panel > ul { font-size: 10px; margin-bottom: 21px; }
+  .guest-login-panel > .button { min-height: 43px; font-size: 12px; }
+  .profile-summary .profile-masked-email { font-size: 9px; }
+}
+@media (max-width: 374px) {
+  .school-login-layout .login-panel { padding: 20px 15px; }
+  .email-login-panel .login-panel-heading { gap: 6px; }
+  .email-login-panel .login-panel-heading h2 { font-size: 15px; }
+  .email-login-panel .login-panel-heading .badge { font-size: 8px; padding-inline: 5px; }
+  #school-email::placeholder { font-size: 10px; letter-spacing: -.5px; }
+}
+
 @media print {
   .site-header, .demo-strip, .site-footer, .mobile-nav, .favorite-button, .detail-actions, .sticky-detail-actions, .modal-backdrop { display: none !important; }
   body { padding: 0; background: white; }

@@ -2,124 +2,125 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { api as browserApi } from '../public/api.js';
+import { api as browserApi, request } from '../public/api.js';
 
-// Exercise the shipped browser functions with a small DOM boundary. No service
-// configuration, credentials, browser cookies or real authentication is used.
-const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8'))
-  .replace(/^import .*;\r?\n/gm, '')
-  .replace(/await refreshSession\(\);\s*$/, '');
+const source=(await readFile(new URL('../public/app.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'').replace(/await refreshSession\(\);\s*$/,'');
+const guestSession=(configured=true)=>({user:null,development:false,authentication:{provider:'guest',email:{configured,domain:'student.xjtlu.edu.cn'},guest:{enabled:true}}});
+const schoolSession=(id='school_1')=>({user:{id,emailVerified:true,schoolVerified:false,emailMasked:'e***3@student.xjtlu.edu.cn'},development:false,authentication:{provider:'school_email',email:{configured:true},guest:{enabled:true}}});
 
-function client(session = { user: null, development: false }, api = {}) {
-  const modalRoot = { innerHTML: '', hasChildNodes() { return Boolean(this.innerHTML); } };
-  const elements = { '#app': { innerHTML: '' }, '#modal-root': modalRoot, '.modal': { focus() {} }, '#toast': { classList: { add() {}, remove() {} } } };
-  const windowEvents = new Map(), navigation = [];
-  const context = {
-    URL, URLSearchParams, FormData, console, setTimeout, clearTimeout, api, categories: [],
-    location: { origin: 'https://campus.test', hash: '#/publish' }, history: { replaceState() {} },
-    document: {
-      querySelector(selector) { return elements[selector] || null; }, querySelectorAll() { return []; },
-      activeElement: null, addEventListener() {}, body: { classList: { add() {}, remove() {} } },
-    },
-    window: { scrollTo() {}, top: { location: { assign(path) { navigation.push(path); } } }, addEventListener(name, callback) { windowEvents.set(name, callback); } },
-  };
-  vm.runInNewContext(`${source}\nglobalThis.test={state,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,newDraft,loadRoute,confirmLogout,logout,trustedSignOutPath};`, context);
-  context.test.state.session = session;
-  return { ...context.test, context, modalRoot, navigation, windowEvents, elements };
+function client(session=guestSession(),api={}){
+  const modalRoot={innerHTML:'',hasChildNodes(){return Boolean(this.innerHTML);}};
+  const elements={'#app':{innerHTML:''},'#modal-root':modalRoot,'.modal':{focus(){}},'#toast':{classList:{add(){},remove(){}}}};
+  const events=new Map(),navigation=[];
+  const location={origin:'https://campus.test',hash:'#/login?return_to=%2F%23%2Fpublish'};
+  const context={URL,URLSearchParams,FormData,console,api,categories:[],location,history:{replaceState(){}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},
+    document:{querySelector:s=>elements[s]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(){},body:{classList:{add(){},remove(){}}}},
+    window:{scrollTo(){},top:{location:{assign(path){navigation.push(path);}}},addEventListener(name,fn){events.set(name,fn);}}};
+  vm.runInNewContext(`${source}\nglobalThis.test={state,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,detail,newDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,becomeGuest,logout,confirmLogout};`,context);
+  context.test.state.session=session;
+  return{...context.test,context,elements,modalRoot,events,navigation};
 }
 
-function externalSession(methods = { phone: true, wechat: true }, extra = {}) {
-  return { user: null, development: false, authentication: { provider: null, external: { configured: true, methods, startUrl: '/api/auth/start' }, platform: { enabled: true } }, ...extra };
-}
+function preparedChallenge(c){Object.assign(c.state.emailLogin,{email:'example.student23@student.xjtlu.edu.cn',challengeEmail:'example.student23@student.xjtlu.edu.cn',challengeId:'challenge-test',code:'123456',expiresAt:Date.now()+600000});}
 
-test('return destinations stay within existing same-origin hash routes', () => {
-  const c = client();
-  for (const path of ['/#/', '/#/publish', '/#/publish?edit=abc-123', '/#/profile?tab=favorites', '/#/product/abc-123']) assert.equal(c.safeReturnTo(path), path);
-  for (const path of ['https://evil.test/', '//evil.test/', '/api/auth/start', '/#/login', '/signout-with-chatgpt', '/\\evil.test/', '/\n#/publish', '/%2f%2fevil.test/']) assert.equal(c.safeReturnTo(path), '/#/');
-  assert.equal(c.safeReturnTo(null), '/#/');
-  assert.equal(c.loginPath('/#/publish'), '#/login?return_to=%2F%23%2Fpublish');
+test('only school-email verification establishes business identity, including in development',()=>{
+  assert(client(schoolSession()).signedIn());
+  assert(!client(guestSession()).signedIn());
+  assert(!client({user:{id:'local_seedy'},development:true,authentication:{provider:'chatgpt'}}).signedIn());
+  assert(!client({user:{id:'legacy'},authentication:{provider:'external'}}).signedIn());
 });
 
-test('unconfigured methods are unavailable and old sessions retain ChatGPT fallback', () => {
-  const c = client();
-  const html = c.loginPage(new URLSearchParams('return_to=%2F%23%2Fpublish'));
-  assert.equal((html.match(/<article class="login-method /g) || []).length, 2);
-  assert.match(html, /<button[^>]*disabled>手机号和微信登录尚未开通/);
-  assert(!html.includes('href="/api/auth/start'));
-  assert.match(html, /href="\/signin-with-chatgpt\?return_to=%2F%23%2Fpublish" target="_top"/);
-  assert(!html.includes('<input') && !html.includes('<iframe'));
+test('login exposes school email and guest only; unavailable mail is not fake delivery',()=>{
+  const c=client(guestSession(false)),html=c.loginPage(new URLSearchParams());
+  assert(html.includes('Example.Student23@student.xjtlu.edu.cn'));
+  assert(html.includes('验证码邮件服务尚未开通，暂不能发送'));
+  assert.match(html,/<button[^>]*id="send-email-button"[^>]*disabled>/);
+  assert(html.includes('以访客身份浏览'));
+  for(const old of ['ChatGPT','Seedy','OIDC','Authing','手机号登录','微信登录','/api/auth/start'])assert(!html.includes(old));
+  assert(!html.includes('验证码已发送'));
 });
 
-test('enabled external methods expose one hosted-login link with the actual method label', () => {
-  for (const [methods, label] of [[{ phone: true, wechat: true }, '手机号 / 微信'], [{ phone: true, wechat: false }, '手机号'], [{ phone: false, wechat: true }, '微信']]) {
-    const c = client(externalSession(methods));
-    const html = c.loginPage(new URLSearchParams('return_to=%2F%23%2Fprofile'));
-    assert.equal((html.match(/href="\/api\/auth\/start\?/g) || []).length, 1);
-    assert(html.includes(`前往${label}登录`));
-    assert.match(html, /href="\/api\/auth\/start\?return_to=%2F%23%2Fprofile" target="_top"/);
+test('safe destinations remain existing same-origin hash routes',()=>{
+  const c=client();
+  for(const path of ['/#/','/#/publish','/#/publish?edit=abc-123','/#/profile?tab=favorites','/#/product/abc-123'])assert.equal(c.safeReturnTo(path),path);
+  for(const path of ['https://evil.test/','//evil.test/','/api/auth/guest','/#/login','/\\evil.test/','/\n#/publish'])assert.equal(c.safeReturnTo(path),'/#/');
+});
+
+test('email validation accepts ordinary school aliases and rejects other domains and invalid dots',async()=>{
+  let sent;
+  const c=client(guestSession(),{sendEmail:async email=>{sent=email;return{challengeId:'new-challenge',expiresIn:600,retryAfter:60,emailMasked:'e***3@student.xjtlu.edu.cn'};}});
+  c.state.emailLogin.email='  Example.Student23@STUDENT.XJTLU.EDU.CN  ';
+  await c.sendEmailCode();assert.equal(sent,'example.student23@student.xjtlu.edu.cn');assert(c.challengeActive());assert(c.retrySeconds()>0&&c.retrySeconds()<=60);assert(c.state.emailLogin.notice.includes('验证码已发送'));
+  for(const value of ['x@example.com','x@student.xjtlu.edu.cn.evil.test','.x@student.xjtlu.edu.cn','x.@student.xjtlu.edu.cn','x..y@student.xjtlu.edu.cn',`${'x'.repeat(65)}@student.xjtlu.edu.cn`]){
+    sent=null;const bad=client(guestSession(),{sendEmail:async()=>{sent='called';}});bad.state.emailLogin.email=value;await bad.sendEmailCode();assert.equal(sent,null);assert(!bad.state.emailLogin.challengeId);
   }
 });
 
-test('callback errors use fixed messages and never echo unknown provider data', () => {
-  const c = client(externalSession());
-  assert(c.loginPage(new URLSearchParams({ auth_error: 'expired_flow' })).includes('登录已超时，请重新开始。'));
-  for (const code of ['<img src=x onerror=alert(1)>', '__proto__', 'https://private.test/token-secret']) {
-    const html = c.loginPage(new URLSearchParams({ auth_error: code, error_description: 'sensitive-provider-detail' }));
-    assert(html.includes('登录未完成，请重新选择可用方式。'));
-    assert(!html.includes(code) && !html.includes('sensitive-provider-detail'));
+test('changing email invalidates a challenge, code, notice and the old-email countdown',()=>{
+  const c=client();preparedChallenge(c);Object.assign(c.state.emailLogin,{requestEmail:c.state.emailLogin.email,retryEmail:c.state.emailLogin.email,retryAt:Date.now()+60000,notice:'sent'});
+  c.setLoginEmail('another.student@student.xjtlu.edu.cn');assert.equal(c.state.emailLogin.challengeId,'');assert.equal(c.state.emailLogin.code,'');assert.equal(c.state.emailLogin.notice,'');assert.equal(c.retrySeconds(),0);
+});
+
+test('delivery failure creates neither challenge nor success countdown; rate limits use server retry seconds',async()=>{
+  const c=client(guestSession(),{sendEmail:async()=>{throw Object.assign(new Error('邮件未能送达'),{status:503,code:'EMAIL_DELIVERY_FAILED'});}});c.state.emailLogin.email='example.student23@student.xjtlu.edu.cn';await c.sendEmailCode();assert.equal(c.state.emailLogin.challengeId,'');assert.equal(c.retrySeconds(),0);assert.equal(c.state.emailLogin.notice,'');
+  const limited=client(guestSession(),{sendEmail:async()=>{throw Object.assign(new Error('稍后重试'),{status:429,retryAfter:31});}});limited.state.emailLogin.email='example.student23@student.xjtlu.edu.cn';await limited.sendEmailCode();assert(limited.retrySeconds()>0&&limited.retrySeconds()<=31);assert.equal(limited.state.emailLogin.notice,'');
+});
+
+test('an obsolete send response cannot bind a code to a newly edited email',async()=>{
+  let resolve;
+  const c=client(guestSession(),{sendEmail:()=>new Promise(done=>{resolve=done;})});c.state.emailLogin.email='example.student23@student.xjtlu.edu.cn';const pending=c.sendEmailCode();c.setLoginEmail('different@student.xjtlu.edu.cn');resolve({challengeId:'old',expiresIn:600,retryAfter:60,emailMasked:'e***3@student.xjtlu.edu.cn'});await pending;assert.equal(c.state.emailLogin.challengeId,'');assert.equal(c.state.emailLogin.notice,'');
+});
+
+test('verify ok alone does not manufacture a login; session confirmation can be retried without reusing the code',async()=>{
+  let verifications=0,confirmations=0;
+  const c=client(guestSession(),{verifyEmail:async()=>{verifications++;return{ok:true};},session:async()=>{confirmations++;return confirmations===1?guestSession():schoolSession();},favorites:async()=>({items:[]})});preparedChallenge(c);
+  await c.verifyEmailCode();assert(!c.signedIn());assert(c.state.emailLogin.verifiedPending);assert.equal(c.context.location.hash,'#/login?return_to=%2F%23%2Fpublish');
+  await c.verifyEmailCode();assert(c.signedIn());assert.equal(verifications,1);assert.equal(c.context.location.hash,'/publish');assert.equal(c.navigation.length,0);assert.equal(c.state.emailLogin.code,'');
+});
+
+test('expired and exhausted codes require a new challenge',async()=>{
+  for(const code of ['CODE_EXPIRED','CODE_ATTEMPTS_EXCEEDED']){
+    const c=client(guestSession(),{verifyEmail:async()=>{throw Object.assign(new Error('请重新发送'),{status:code==='CODE_EXPIRED'?410:429,code});}});preparedChallenge(c);await c.verifyEmailCode();assert.equal(c.state.emailLogin.challengeId,'');assert.equal(c.state.emailLogin.code,'');assert(!c.signedIn());
   }
 });
 
-test('gates, modal prompts and footer enter the same internal login selection page', () => {
-  const c = client();
-  for (const html of [c.authGate(), c.footer()]) {
-    assert(html.includes('href="#/login?return_to=%2F%23%2Fpublish"'));
-    assert(!html.includes('href="/signin-with-chatgpt'));
-  }
-  c.promptLogin();
-  assert(c.modalRoot.innerHTML.includes('href="#/login?return_to=%2F%23%2Fpublish"'));
+test('a possible account switch blocks the old identity until the new session is confirmed',async()=>{
+  const c=client(schoolSession('old'),{verifyEmail:async()=>({ok:true}),session:async()=>{throw new Error('Session confirmation unavailable');}});c.state.draft=c.newDraft();c.state.draft.fields.title='Old account draft';preparedChallenge(c);await c.verifyEmailCode();assert(!c.signedIn());assert(c.state.identityUnconfirmed);c.setLoginEmail('other@student.xjtlu.edu.cn');assert(!c.signedIn());assert.equal(c.state.emailLogin.priorUserId,'old');
 });
 
-test('profile identity distinguishes external accounts and local platform simulation', () => {
-  const external = client(externalSession(undefined, { user: { id: 'ext_1' }, authentication: { provider: 'external', external: { configured: true, methods: { phone: true, wechat: true } }, platform: { enabled: true } } }));
-  assert(external.profile().includes('手机号 / 微信账号 已登录'));
-  const local = client({ user: { id: 'local_seedy' }, development: true });
-  assert(local.profile().includes('本地模拟账号 Seedy 已登录'));
-  assert(local.loginPage(new URLSearchParams()).includes('本地模拟 ChatGPT 登录'));
-  assert(!local.profile().includes('ChatGPT 已登录'));
-});
-
-test('draft warning survives the intermediate login page and retains beforeunload protection', async () => {
-  const c = client();
-  c.state.draft = c.newDraft(); c.state.draft.fields.title = 'Unsaved title';
-  c.context.location.hash = '#/login?return_to=%2F%23%2Fpublish';
-  await c.loadRoute();
-  assert(c.elements['#app'].innerHTML.includes('跳转到登录服务会清空未保存的表单和照片'));
-  let prevented = false;
-  c.windowEvents.get('beforeunload')({ preventDefault() { prevented = true; } });
-  assert(prevented); assert.equal(c.state.draft.fields.title, 'Unsaved title');
-});
-
-test('logout requires confirmation and a successful API result before trusted top-level navigation', async () => {
-  let calls = 0;
-  const c = client({ user: { id: 'user1' } }, { logout: async () => { calls++; return { redirectTo: '/signout-with-chatgpt?return_to=%2F' }; } });
-  c.confirmLogout(); assert.equal(calls, 0); assert(c.modalRoot.innerHTML.includes('确认退出'));
-  await c.logout(); assert.equal(calls, 1); assert.deepEqual(c.navigation, ['/signout-with-chatgpt?return_to=%2F%23%2F']);
-  assert.equal(c.state.session.user.id, 'user1'); // UI does not manufacture an anonymous session.
-});
-
-test('failed logout and untrusted redirects never claim successful logout or navigate', async () => {
-  for (const response of [{ redirectTo: '//evil.test/' }, { redirectTo: '/api/products' }, null]) {
-    const c = client({ user: { id: 'user1' } }, { logout: async () => { if (!response) throw new Error('Network unavailable'); return response; } });
-    await c.logout(); assert.equal(c.navigation.length, 0); assert(c.modalRoot.innerHTML.includes('尚未完成退出'));
-    assert.equal(c.state.session.user.id, 'user1');
+test('email login preserves anonymous/same-account drafts and clears drafts from a different account',async()=>{
+  for(const prior of [guestSession(),schoolSession('same'),schoolSession('other')]){
+    const c=client(prior,{verifyEmail:async()=>({ok:true}),session:async()=>schoolSession('same'),favorites:async()=>({items:[]})});c.state.draft=c.newDraft();c.state.draft.fields.title='Unsaved goods';preparedChallenge(c);await c.verifyEmailCode();
+    if(prior.user?.id==='other')assert.equal(c.state.draft,null);else assert.equal(c.state.draft.fields.title,'Unsaved goods');
   }
 });
 
-test('browser logout uses a same-origin POST with JSON and credentials', async t => {
-  let call;
-  t.mock.method(globalThis, 'fetch', async (path, options) => { call = { path, options }; return Response.json({ redirectTo: '/signout-with-chatgpt?return_to=%2F' }); });
-  await browserApi.logout();
-  assert.equal(call.path, '/api/auth/logout'); assert.equal(call.options.method, 'POST');
-  assert.equal(call.options.credentials, 'same-origin'); assert.equal(call.options.headers['Content-Type'], 'application/json');
+test('guest entry actually posts and confirms anonymous session, clears private caches and goes home',async()=>{
+  let posts=0;const c=client(schoolSession(),{guest:async()=>{posts++;return{ok:true};},session:async()=>guestSession()});c.state.favorites=[{id:'private'}];c.state.published=[{id:'mine'}];c.state.detail={mine:true};await c.becomeGuest();assert.equal(posts,1);assert.equal(c.state.session.user,null);assert.equal(c.state.favorites.length,0);assert.equal(c.state.published.length,0);assert.equal(c.state.detail,null);assert.equal(c.context.location.hash,'/');
+});
+
+test('guest mode asks before clearing a draft; failure never invents an anonymous session',async()=>{
+  let calls=0;const c=client(schoolSession(),{guest:async()=>{calls++;throw new Error('Network unavailable');}});c.state.draft=c.newDraft();c.state.draft.fields.title='Keep';await c.becomeGuest();assert.equal(calls,0);assert(c.modalRoot.innerHTML.includes('清除草稿，进入访客'));
+  await c.becomeGuest('guest',true);assert.equal(calls,1);assert(c.signedIn());assert.equal(c.state.draft.fields.title,'Keep');assert(c.state.guestError);
+});
+
+test('logout requires server success and a confirmed guest session; never performs external navigation',async()=>{
+  let calls=0;const c=client(schoolSession(),{logout:async()=>{calls++;return{ok:true};},session:async()=>guestSession()});c.confirmLogout();assert.equal(calls,0);await c.logout();assert.equal(calls,1);assert(!c.signedIn());assert.equal(c.navigation.length,0);assert.equal(c.context.location.hash,'/');
+});
+
+test('a later session refresh resolves uncertain identity and drops the old-account draft',async()=>{
+  const c=client(schoolSession('old'),{session:async()=>guestSession()});c.state.identityUnconfirmed=true;c.state.draft=c.newDraft();c.state.draft.fields.title='Old private draft';await c.refreshSession();assert.equal(c.state.session.user,null);assert.equal(c.state.identityUnconfirmed,false);assert.equal(c.state.draft,null);
+});
+
+test('public seller badge uses server boolean and own profile shows only masked email',()=>{
+  const c=client(schoolSession()),p={id:'abc',images:[],title:'Fan',price:20,status:'active',specs:{},seller:'Student',sellerEmailVerified:true};assert(c.detail(p).includes('学校邮箱已验证'));assert(c.detail({...p,sellerEmailVerified:false}).includes('学校邮箱未核验'));assert(c.profile().includes('e***3@student.xjtlu.edu.cn'));assert(c.profile().includes('未核验在读学籍'));
+});
+
+test('auth requests use same-origin JSON POST and numeric bounded retry metadata',async t=>{
+  const calls=[];t.mock.method(globalThis,'fetch',async(path,options)=>{calls.push({path,options});return Response.json({ok:true});});await browserApi.sendEmail('example.student23@student.xjtlu.edu.cn');await browserApi.verifyEmail({email:'example.student23@student.xjtlu.edu.cn',challengeId:'test',code:'123456'});await browserApi.guest();await browserApi.logout();for(const call of calls){assert.equal(call.options.method,'POST');assert.equal(call.options.credentials,'same-origin');assert.equal(call.options.headers['Content-Type'],'application/json');assert(!call.path.includes('123456'));}
+  t.mock.method(globalThis,'fetch',async()=>Response.json({error:{code:'RATE_LIMITED',message:'Wait'}},{status:429,headers:{'Retry-After':'60'}}));await assert.rejects(()=>request('/api/auth/email/send'),error=>error.retryAfter===60&&typeof error.retryAfter==='number');
+});
+
+test('no browser persistence or URL parameter holds the email code; draft beforeunload remains',()=>{
+  assert(!source.includes('localStorage')&&!source.includes('sessionStorage')&&!source.includes('console.log('));const c=client();c.state.draft=c.newDraft();c.state.draft.fields.title='Keep';let prevented=false;c.events.get('beforeunload')({preventDefault(){prevented=true;}});assert(prevented);
 });
