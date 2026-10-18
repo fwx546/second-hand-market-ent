@@ -17,7 +17,7 @@ test('empty production database; identity never publishes account email or full 
   assert.equal(anonymous.data.development, false);
   assert.equal(anonymous.data.capabilities.canPublish, false);
   const loggedIn = await api(env, '/api/me', { viewer: { ...A, email: 'private@school.edu', displayName: 'PRIVATE_FULL_NAME' } });
-  assert.deepEqual(loggedIn.data.user, { id: A.userId, displayName: '橘子同学', schoolVerified: false, emailVerified: true, emailMasked: A.emailMasked });
+  assert.deepEqual(loggedIn.data.user, { id: A.userId, displayName: '橘子同学', campus: '', schoolVerified: false, emailVerified: true, emailMasked: A.emailMasked });
   assert.equal(loggedIn.data.capabilities.canPublish, true);
   assert.equal(loggedIn.data.signInUrl, '/#/login');
   assert.equal(loggedIn.data.authentication.provider, 'school_email');
@@ -164,7 +164,7 @@ test('server-side form validation and parameterized search', async t => {
   assert.equal((await api(env, '/api/products?pageSize=999')).status, 400);
   assert.equal((await api(env, '/api/products?sort=unknown')).status, 400);
   assert.equal((await api(env, '/api/products?cheap=true')).status, 400);
-  assert.equal((await api(env, `/api/products/${created.data.product.id}`, { method: 'PATCH', viewer: A, body: { status: 'sold' } })).status, 400);
+  assert.equal((await api(env, `/api/products/${created.data.product.id}`, { method: 'PATCH', viewer: A, body: { status: 'archived' } })).status, 400);
   assert.equal((await api(env, '/api/products', { method: 'POST', viewer: A, body: '{broken' })).status, 400);
   assert.equal((await api(env, '/api/products', { method: 'POST', viewer: A, body: { ...input, description: 'x'.repeat(70000) } })).status, 413);
 });

@@ -1,0 +1,9 @@
+{
+  "name": "juzi-local-qq-mail-relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "description": "Authenticated QQ SMTP relay for Juzi school email verification",
+  "dependencies": { "nodemailer": "10.1.3" }
+}

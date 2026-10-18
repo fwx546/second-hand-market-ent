@@ -121,7 +121,8 @@ async function ensureUser(db, userId) {
   await statement(db, 'INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING', [userId, '橘子同学', Date.now()]).run();
 }
 async function productRow(db, productId) { return first(db, 'SELECT * FROM products WHERE id = ?', [productId]); }
-function visible(row, viewer) { return row && (row.status === 'active' || row.owner_id === viewer?.userId); }
+function productStatus(row) { return row.deleted_at !== null && row.deleted_at !== undefined ? 'deleted' : row.sold_at !== null && row.sold_at !== undefined ? 'sold' : row.status; }
+function visible(row, viewer) { return row && (productStatus(row) === 'active' || row.owner_id === viewer?.userId); }
 function owned(row, viewer) {
   if (!row) fail(404, 'NOT_FOUND', '商品不存在。');
   if (row.owner_id !== viewer?.userId) fail(403, 'FORBIDDEN', '只能管理自己发布的商品。');
@@ -136,12 +137,30 @@ async function dto(db, row, viewer) {
     id: row.id, title: row.title, category: row.category, price: row.price_cents / 100, originalPrice: row.original_price_cents / 100,
     condition: row.condition, campus: row.campus, location: row.location, description: row.description,
     specs: JSON.parse(row.specs_json), graduation: Boolean(row.graduation), seller: row.seller, avatar: '🍊',
-    createdAt: row.created_at, status: row.status, mine: row.owner_id === viewer?.userId,
+    createdAt: row.created_at, status: productStatus(row), mine: row.owner_id === viewer?.userId,
     sellerEmailVerified: Boolean(schoolAccount?.verified_at),
     images: imageIds.map(mediaId => `/api/media/${encodeURIComponent(mediaId)}`), imageIds,
   };
 }
 async function dtos(db, rows, viewer) { return Promise.all(rows.map(row => dto(db, row, viewer))); }
+async function userDto(db, viewer) {
+  if (!viewer) return null;
+  const stored = await first(db, 'SELECT display_name, campus FROM users WHERE id = ?', [viewer.userId]);
+  return { id: viewer.userId, displayName: stored?.display_name || '橘子同学', campus: stored?.campus || '', schoolVerified: false, emailVerified: true, emailMasked: viewer.emailMasked || null };
+}
+async function updateProfile(request, db, viewer) {
+  const userId = requireViewer(viewer), body = await payload(request);
+  if (!Object.keys(body).length || Object.keys(body).some(key => !['displayName', 'campus'].includes(key))) fail(400, 'INVALID_INPUT', '请只修改昵称与常用校区。');
+  const changes = {};
+  if (Object.hasOwn(body, 'displayName')) {
+    changes.display_name = text(body.displayName, '昵称', 1, 20);
+    if (changes.display_name.includes('@')) fail(400, 'INVALID_INPUT', '昵称中请不要填写邮箱地址。');
+  }
+  if (Object.hasOwn(body, 'campus')) changes.campus = choice(body.campus, ['', ...CAMPUSES], '常用校区');
+  await ensureUser(db, userId);
+  await statement(db, `UPDATE users SET ${Object.keys(changes).map(key => `${key} = ?`).join(', ')} WHERE id = ?`, [...Object.values(changes), userId]).run();
+  return json({ user: await userDto(db, viewer) });
+}
 function positiveInteger(value, fallback, maximum) {
   if (value === null) return fallback;
   if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) > maximum) fail(400, 'INVALID_INPUT', '分页参数无效。');
@@ -155,7 +174,7 @@ async function listProducts(db, search, viewer) {
   if (condition) choice(condition, CONDITIONS, '成色');
   const query = text(search.get('query') || '', '搜索词', 0, 100), sort = search.get('sort') || 'newest';
   choice(sort, ['newest', 'price-asc', 'price-desc'], '排序');
-  const where = ["status = 'active'"], values = [];
+  const where = ["status = 'active'", 'sold_at IS NULL', 'deleted_at IS NULL'], values = [];
   for (const [column, value] of [['category', category === 'all' ? '' : category], ['campus', campus], ['condition', condition]]) {
     if (value) { where.push(`${column} = ?`); values.push(value); }
   }
@@ -172,7 +191,7 @@ async function listProducts(db, search, viewer) {
   const count = await first(db, `SELECT count(*) AS total FROM products WHERE ${clause}`, values);
   const rows = await all(db, `SELECT * FROM products WHERE ${clause} ORDER BY ${order}, id DESC LIMIT ? OFFSET ?`, [...values, pageSize, (page - 1) * pageSize]);
   const categoryCounts = { all: 0, appliance: 0, ebike: 0, daily: 0 };
-  for (const group of await all(db, "SELECT category, count(*) AS total FROM products WHERE status = 'active' GROUP BY category")) {
+  for (const group of await all(db, "SELECT category, count(*) AS total FROM products WHERE status = 'active' AND sold_at IS NULL AND deleted_at IS NULL GROUP BY category")) {
     categoryCounts[group.category] = Number(group.total); categoryCounts.all += Number(group.total);
   }
   const total = Number(count.total);
@@ -183,9 +202,10 @@ async function assertImagesOwned(db, imageIds, userId) {
   if (rows.length !== imageIds.length) fail(403, 'INVALID_MEDIA_OWNER', '只能使用自己上传的照片。');
 }
 function productGuard(productId, status) {
+  const logical = status === 'active' ? " AND guarded.status = 'active' AND guarded.sold_at IS NULL AND guarded.deleted_at IS NULL" : status === 'inactive' ? " AND guarded.status = 'inactive' AND guarded.sold_at IS NULL AND guarded.deleted_at IS NULL" : status === 'sold' ? " AND guarded.status = 'inactive' AND guarded.sold_at IS NOT NULL AND guarded.deleted_at IS NULL" : status === 'deleted' ? " AND guarded.status = 'inactive' AND guarded.deleted_at IS NOT NULL" : '';
   return {
-    sql: `EXISTS (SELECT 1 FROM products guarded WHERE guarded.id = ?${status ? ' AND guarded.status = ?' : ''})`,
-    values: status ? [productId, status] : [productId],
+    sql: `EXISTS (SELECT 1 FROM products guarded WHERE guarded.id = ?${logical})`,
+    values: [productId],
   };
 }
 function imageStatements(db, productId, imageIds, status) {
@@ -197,7 +217,7 @@ function contactStatement(db, productId, value, status) {
   return statement(db, `INSERT INTO private_contacts (product_id, type, value) SELECT ?, ?, ? WHERE ${guard.sql} ON CONFLICT(product_id) DO UPDATE SET type = excluded.type, value = excluded.value`, [productId, value.contactType, value.contactValue, ...guard.values]);
 }
 async function assertActiveQuota(db, userId) {
-  const row = await first(db, "SELECT count(*) AS n FROM products WHERE owner_id = ? AND status = 'active'", [userId]);
+  const row = await first(db, "SELECT count(*) AS n FROM products WHERE owner_id = ? AND status = 'active' AND sold_at IS NULL AND deleted_at IS NULL", [userId]);
   if (Number(row.n) >= 100) fail(429, 'ACTIVE_LIMIT', '最多同时上架 100 件商品，请先下架一些闲置。');
 }
 async function assertCreateQuota(db, userId) {
@@ -218,10 +238,9 @@ async function createProduct(request, db, viewer) {
   await ensureUser(db, userId);
   const productId = crypto.randomUUID(), now = Date.now();
   const results = await db.batch([
-    statement(db, "INSERT INTO products (id, owner_id, title, category, price_cents, original_price_cents, condition, campus, location, description, specs_json, graduation, seller, status, created_at, updated_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT count(*) FROM products WHERE owner_id = ? AND created_at >= ?) < 20 AND (SELECT count(*) FROM products WHERE owner_id = ? AND status = 'active') < 100",
+    statement(db, "INSERT INTO products (id, owner_id, title, category, price_cents, original_price_cents, condition, campus, location, description, specs_json, graduation, seller, status, created_at, updated_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT count(*) FROM products WHERE owner_id = ? AND created_at >= ?) < 20 AND (SELECT count(*) FROM products WHERE owner_id = ? AND status = 'active' AND sold_at IS NULL AND deleted_at IS NULL) < 100",
       [productId, userId, value.title, value.category, value.priceCents, value.originalPriceCents, value.condition, value.campus, value.location, value.description, JSON.stringify(value.specs), Number(value.graduation), value.seller, 'active', now, now, userId, now - DAY, userId]),
     contactStatement(db, productId, value), ...imageStatements(db, productId, value.imageIds),
-    statement(db, 'UPDATE users SET display_name = ? WHERE id = ? AND EXISTS (SELECT 1 FROM products WHERE id = ?)', [value.seller, userId, productId]),
   ]);
   if (!results[0].meta?.changes) { await assertCreateQuota(db, userId); fail(429, 'PUBLISH_LIMIT', '发布过于频繁，请稍后再试。'); }
   return json({ product: await dto(db, await productRow(db, productId), viewer) }, 201);
@@ -231,12 +250,20 @@ async function updateProduct(request, db, productId, viewer) {
   owned(existing, viewer);
   const body = await payload(request);
   checkFields(body, true);
-  const status = Object.hasOwn(body, 'status') ? choice(body.status, ['active', 'inactive'], '商品状态') : existing.status;
-  if (status === 'active' && existing.status === 'inactive') await assertActiveQuota(db, userId);
-  const activeGuard = "(? = 'inactive' OR status = 'active' OR (SELECT count(*) FROM products WHERE owner_id = ? AND status = 'active') < 100)";
+  const explicitStatus = Object.hasOwn(body, 'status');
+  const status = explicitStatus ? choice(body.status, ['active', 'inactive', 'sold'], '商品状态') : productStatus(existing);
+  if (productStatus(existing) === 'deleted' && !(Object.keys(body).length === 1 && body.status === 'inactive')) fail(409, 'PRODUCT_DELETED', '请先将商品从回收站恢复为下架状态。');
+  if (status === 'active' && productStatus(existing) !== 'active') await assertActiveQuota(db, userId);
+  const storedStatus = status === 'active' ? 'active' : 'inactive', now = Date.now();
+  const soldAt = status === 'sold' ? existing.sold_at ?? now : null;
+  const activeGuard = "(? <> 'active' OR (status = 'active' AND sold_at IS NULL AND deleted_at IS NULL) OR (SELECT count(*) FROM products WHERE owner_id = ? AND status = 'active' AND sold_at IS NULL AND deleted_at IS NULL) < 100)";
   if (Object.keys(body).length === 1 && Object.hasOwn(body, 'status')) {
-    const result = await statement(db, `UPDATE products SET status = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND ${activeGuard}`, [status, Date.now(), productId, userId, status, userId]).run();
-    if (!result.meta?.changes) fail(429, 'ACTIVE_LIMIT', '最多同时上架 100 件商品，请先下架一些闲置。');
+    const result = await statement(db, `UPDATE products SET status = ?, sold_at = ?, deleted_at = NULL, updated_at = ? WHERE id = ? AND owner_id = ? AND deleted_at IS ? AND (deleted_at IS NULL OR ? = 'inactive') AND ${activeGuard}`, [storedStatus, soldAt, now, productId, userId, existing.deleted_at, status, status, userId]).run();
+    if (!result.meta?.changes) {
+      const current = await productRow(db, productId);
+      if (!current || current.deleted_at !== existing.deleted_at) fail(409, 'PRODUCT_STATE_CHANGED', '商品状态已变化，请刷新后重试。');
+      fail(429, 'ACTIVE_LIMIT', '最多同时上架 100 件商品，请先下架一些闲置。');
+    }
   } else {
     const contact = await first(db, 'SELECT type, value FROM private_contacts WHERE product_id = ?', [productId]);
     const value = validateProduct({
@@ -248,13 +275,23 @@ async function updateProduct(request, db, productId, viewer) {
     await assertImagesOwned(db, value.imageIds, userId);
     const guard = productGuard(productId, status);
     const results = await db.batch([
-      statement(db, `UPDATE products SET title = ?, category = ?, price_cents = ?, original_price_cents = ?, condition = ?, campus = ?, location = ?, description = ?, specs_json = ?, graduation = ?, seller = ?, status = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND ${activeGuard}`,
-        [value.title, value.category, value.priceCents, value.originalPriceCents, value.condition, value.campus, value.location, value.description, JSON.stringify(value.specs), Number(value.graduation), value.seller, status, Date.now(), productId, userId, status, userId]),
+      statement(db, `UPDATE products SET title = ?, category = ?, price_cents = ?, original_price_cents = ?, condition = ?, campus = ?, location = ?, description = ?, specs_json = ?, graduation = ?, seller = ?, ${explicitStatus ? 'status = ?, sold_at = ?, ' : ''}updated_at = ? WHERE id = ? AND owner_id = ? AND deleted_at IS NULL AND ${activeGuard}${explicitStatus ? '' : ` AND ${guard.sql}`}`,
+        [value.title, value.category, value.priceCents, value.originalPriceCents, value.condition, value.campus, value.location, value.description, JSON.stringify(value.specs), Number(value.graduation), value.seller, ...(explicitStatus ? [storedStatus, soldAt] : []), now, productId, userId, explicitStatus ? status : 'inactive', userId, ...(explicitStatus ? [] : guard.values)]),
       contactStatement(db, productId, value, status), statement(db, `DELETE FROM product_media WHERE product_id = ? AND ${guard.sql}`, [productId, ...guard.values]),
-      ...imageStatements(db, productId, value.imageIds, status), statement(db, `UPDATE users SET display_name = ? WHERE id = ? AND ${guard.sql}`, [value.seller, userId, ...guard.values]),
+      ...imageStatements(db, productId, value.imageIds, status),
     ]);
-    if (!results[0].meta?.changes) fail(429, 'ACTIVE_LIMIT', '最多同时上架 100 件商品，请先下架一些闲置。');
+    if (!results[0].meta?.changes) {
+      if (!explicitStatus || productStatus(await productRow(db, productId)) === 'deleted') fail(409, 'PRODUCT_STATE_CHANGED', '商品状态已变化，请刷新后重试。');
+      fail(429, 'ACTIVE_LIMIT', '最多同时上架 100 件商品，请先下架一些闲置。');
+    }
   }
+  return json({ product: await dto(db, await productRow(db, productId), viewer) });
+}
+async function deleteProduct(db, productId, viewer) {
+  const userId = requireViewer(viewer), existing = await productRow(db, productId);
+  owned(existing, viewer);
+  // Recycle-bin deletion keeps ownership, photos and publish-quota history for restoration.
+  await statement(db, "UPDATE products SET status = 'inactive', sold_at = NULL, deleted_at = COALESCE(deleted_at, ?), updated_at = ? WHERE id = ? AND owner_id = ?", [Date.now(), Date.now(), productId, userId]).run();
   return json({ product: await dto(db, await productRow(db, productId), viewer) });
 }
 function sniffImage(bytes) {
@@ -293,7 +330,7 @@ async function getMedia(env, db, mediaId, viewer) {
   const row = await first(db, 'SELECT * FROM media WHERE id = ?', [mediaId]);
   if (!row) fail(404, 'NOT_FOUND', '照片不存在。');
   if (row.owner_id !== viewer?.userId) {
-    const published = await first(db, "SELECT pm.media_id FROM product_media pm JOIN products p ON p.id = pm.product_id WHERE pm.media_id = ? AND p.status = 'active' LIMIT 1", [mediaId]);
+    const published = await first(db, "SELECT pm.media_id FROM product_media pm JOIN products p ON p.id = pm.product_id WHERE pm.media_id = ? AND p.status = 'active' AND p.sold_at IS NULL AND p.deleted_at IS NULL LIMIT 1", [mediaId]);
     if (!published) fail(404, 'NOT_FOUND', '照片不存在。');
   }
   const object = await requireBucket(env).get(row.object_key);
@@ -318,10 +355,9 @@ export async function handleMarket(request, env, viewer = null, { development = 
     const db = requireDb(env);
     const path = url.pathname.replace(/\/$/, '');
     if (path === '/api/me' && method === 'GET') {
-      const stored = viewer ? await first(db, 'SELECT display_name FROM users WHERE id = ?', [viewer.userId]) : null;
       return json({
         development: development === true,
-        user: viewer ? { id: viewer.userId, displayName: stored?.display_name || '橘子同学', schoolVerified: false, emailVerified: true, emailMasked: viewer.emailMasked || null } : null,
+        user: await userDto(db, viewer),
         signInUrl: '/#/login', signOutUrl: '/api/auth/logout',
         authentication: authentication || {
           provider: viewer ? 'school_email' : 'guest',
@@ -331,6 +367,7 @@ export async function handleMarket(request, env, viewer = null, { development = 
         capabilities: { canPublish: Boolean(viewer), canViewContact: Boolean(viewer), canFavorite: Boolean(viewer), schoolVerificationRequired: false },
       });
     }
+    if (path === '/api/me' && method === 'PATCH') return await updateProfile(request, db, viewer);
     if (path === '/api/products') {
       if (method === 'GET') return await listProducts(db, url.searchParams, viewer);
       if (method === 'POST') return await createProduct(request, db, viewer);
@@ -341,7 +378,7 @@ export async function handleMarket(request, env, viewer = null, { development = 
     }
     if (path === '/api/me/favorites' && method === 'GET') {
       const userId = requireViewer(viewer);
-      return json({ items: await dtos(db, await all(db, "SELECT p.* FROM products p JOIN favorites f ON f.product_id = p.id WHERE f.user_id = ? AND (p.status = 'active' OR p.owner_id = ?) ORDER BY f.created_at DESC, p.id DESC", [userId, userId]), viewer) });
+      return json({ items: await dtos(db, await all(db, "SELECT p.* FROM products p JOIN favorites f ON f.product_id = p.id WHERE f.user_id = ? AND ((p.status = 'active' AND p.sold_at IS NULL AND p.deleted_at IS NULL) OR p.owner_id = ?) ORDER BY f.created_at DESC, p.id DESC", [userId, userId]), viewer) });
     }
     let match = path.match(/^\/api\/me\/favorites\/([^/]+)$/);
     if (match && ['PUT', 'DELETE'].includes(method)) {
@@ -371,6 +408,7 @@ export async function handleMarket(request, env, viewer = null, { development = 
         return json({ product: await dto(db, row, viewer) });
       }
       if (!match[2] && method === 'PATCH') return await updateProduct(request, db, productId, viewer);
+      if (!match[2] && method === 'DELETE') return await deleteProduct(db, productId, viewer);
     }
     if (path === '/api/media' && method === 'POST') return await uploadMedia(request, env, db, viewer);
     match = path.match(/^\/api\/media\/([^/]+)$/);

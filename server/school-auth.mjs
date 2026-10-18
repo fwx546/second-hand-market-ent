@@ -40,6 +40,7 @@ function normalizeEmail(value) {
   return email;
 }
 function mask(email) { return `${email.split('@')[0].slice(0, 2)}***@${DOMAIN}`; }
+function verifiedDisplayName(email) { return email.trim().split('@')[0].replace(/[0-9]/g, '').slice(0, 20) || '橘子同学'; }
 function originConfig(env, development = false) {
   try {
     const origin = env.JUZI_EMAIL_ORIGIN?.trim();
@@ -57,13 +58,39 @@ function senderValid(value) {
   const address = angle ? angle[1] : input;
   return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$/.test(address);
 }
+function relayUrl(value, origin) {
+  try {
+    if (typeof value !== 'string' || value.length > 2048) return null;
+    const raw = value.trim();
+    if (/[\u0000-\u0020\u007F?#]/.test(raw) || /^https?:\/\/[^/]*@/i.test(raw)) return null;
+    const url = new URL(raw), hostname = url.hostname.toLowerCase();
+    if (url.username || url.password || url.search || url.hash || url.pathname !== '/send') return null;
+    // Loopback HTTP is only meaningful for the trusted localhost development app.
+    if (url.protocol === 'http:') return !origin.secure && ['localhost', '127.0.0.1'].includes(hostname) ? url.href : null;
+    // Production relays must be public HTTPS DNS hosts; no IP/private-host credentials sink.
+    if (url.protocol !== 'https:' || !hostname.includes('.') || hostname.endsWith('.') ||
+        /^[\d.]+$/.test(hostname) || hostname.includes(':') || hostname.startsWith('[') ||
+        /(?:^|\.)(?:localhost|local|internal|lan|home|test|invalid)$/.test(hostname)) return null;
+    return url.href;
+  } catch { return null; }
+}
 function config(env, development = false) {
   const origin = originConfig(env, development), daily = String(env.JUZI_EMAIL_DAILY_LIMIT ?? '').trim() || '1000';
-  if (env.JUZI_EMAIL_ENABLED !== 'true' || !origin || !senderValid(env.JUZI_EMAIL_FROM) ||
-      typeof env.RESEND_API_KEY !== 'string' || !env.RESEND_API_KEY.trim() || /[\r\n]/.test(env.RESEND_API_KEY) ||
+  if (env.JUZI_EMAIL_ENABLED !== 'true' || !origin ||
       typeof env.JUZI_EMAIL_AUTH_SECRET !== 'string' || env.JUZI_EMAIL_AUTH_SECRET.length < 32 || env.JUZI_EMAIL_AUTH_SECRET.length > 4096 ||
       !/^[1-9]\d{0,4}$/.test(daily) || Number(daily) > 10000) return null;
-  return { ...origin, from: env.JUZI_EMAIL_FROM.trim(), apiKey: env.RESEND_API_KEY, secret: env.JUZI_EMAIL_AUTH_SECRET, dailyLimit: Number(daily) };
+  const provider = String(env.JUZI_EMAIL_PROVIDER ?? '').trim() || 'resend';
+  const common = { ...origin, provider, secret: env.JUZI_EMAIL_AUTH_SECRET, dailyLimit: Number(daily) };
+  if (provider === 'resend') {
+    if (!senderValid(env.JUZI_EMAIL_FROM) || typeof env.RESEND_API_KEY !== 'string' || !env.RESEND_API_KEY.trim() || /[\r\n]/.test(env.RESEND_API_KEY)) return null;
+    return { ...common, from: env.JUZI_EMAIL_FROM.trim(), apiKey: env.RESEND_API_KEY };
+  }
+  if (provider === 'qq_relay') {
+    const url = relayUrl(env.JUZI_EMAIL_RELAY_URL, origin), token = env.JUZI_EMAIL_RELAY_TOKEN;
+    if (!url || typeof token !== 'string' || token.length < 32 || token.length > 4096 || /[^\x21-\x7E]/.test(token)) return null;
+    return { ...common, relayUrl: url, relayToken: token };
+  }
+  return null;
 }
 export function getSchoolAuthConfig(env, { development = false } = {}) {
   return { configured: Boolean(config(env, development)), domain: DOMAIN, sendUrl: '/api/auth/email/send', verifyUrl: '/api/auth/email/verify' };
@@ -129,12 +156,13 @@ async function rateError(db, addressHash, bindingHash, dailyLimit, now) {
   fail(429, 'EMAIL_RATE_LIMIT', '请求过于频繁，请稍后再试。', 60);
 }
 async function deliver(cfg, email, code, challengeId, fetchImpl) {
-  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 5000);
+  const relay = cfg.provider === 'qq_relay';
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), relay ? 15000 : 5000);
   try {
-    const response = await fetchImpl(RESEND_ENDPOINT, {
+    const response = await fetchImpl(relay ? cfg.relayUrl : RESEND_ENDPOINT, {
       method: 'POST', redirect: 'manual', signal: controller.signal,
-      headers: { Authorization: `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': challengeId },
-      body: JSON.stringify({ from: cfg.from, to: [email], subject: '橘子集 · 学校邮箱登录验证码', text: `你的橘子集登录验证码：${code}\n\n验证码 10 分钟内有效，请勿转发。如果不是你本人操作，请忽略此邮件。\n\n橘子集是校园闲置交易平台。本次仅验证你对学生邮箱的控制权，不验证在读学籍；这不是学校官方通知。` }),
+      headers: relay ? { Authorization: `Bearer ${cfg.relayToken}`, 'Content-Type': 'application/json' } : { Authorization: `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': challengeId },
+      body: JSON.stringify(relay ? { requestId: challengeId, email, code } : { from: cfg.from, to: [email], subject: '橘子集 · 学校邮箱登录验证码', text: `你的橘子集登录验证码：${code}\n\n验证码 10 分钟内有效，请勿转发。如果不是你本人操作，请忽略此邮件。\n\n橘子集是校园闲置交易平台。本次仅验证你对学生邮箱的控制权，不验证在读学籍；这不是学校官方通知。` }),
     });
     if (!response.ok || response.redirected || response.status >= 300 && response.status < 400 || Number(response.headers.get('content-length')) > 16384) {
       await response.body?.cancel(); throw new Error('Delivery failed');
@@ -152,7 +180,7 @@ async function deliver(cfg, email, code, challengeId, fetchImpl) {
     const bytes = new Uint8Array(size); let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
     const result = JSON.parse(new TextDecoder().decode(bytes));
-    if (typeof result.id !== 'string' || !result.id || result.id.length > 200) throw new Error('Delivery unconfirmed');
+    if (typeof result.id !== 'string' || !result.id.trim() || result.id.length > 200) throw new Error('Delivery unconfirmed');
   } finally { clearTimeout(timer); }
 }
 async function send(request, env, cfg, body, fetchImpl) {
@@ -192,11 +220,12 @@ async function verify(request, env, cfg, body) {
     if (row.attempts >= 5) fail(429, 'CODE_ATTEMPTS_EXCEEDED', '验证码错误次数过多，请重新获取。', 60);
     fail(400, 'INVALID_CODE', '验证码不正确，请核对后重试。');
   }
-  const candidateUserId = `school_${crypto.randomUUID()}`, session = randomToken(), previous = readCookie(request, cookieNames(cfg).session);
+  const displayName = verifiedDisplayName(body.email), candidateUserId = `school_${crypto.randomUUID()}`, session = randomToken(), previous = readCookie(request, cookieNames(cfg).session);
   const batch = [
-    statement(db, 'INSERT INTO users (id, display_name, created_at) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM school_email_accounts WHERE email_hash = ?)', [candidateUserId, '橘子同学', now, addressHash]),
+    statement(db, 'INSERT INTO users (id, display_name, created_at) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM school_email_accounts WHERE email_hash = ?)', [candidateUserId, displayName, now, addressHash]),
     statement(db, 'INSERT INTO school_email_accounts (email_hash, user_id, email_masked, verified_at) SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM users WHERE id = ?) ON CONFLICT(email_hash) DO NOTHING', [addressHash, candidateUserId, row.email_masked, now, candidateUserId]),
     statement(db, 'UPDATE school_email_accounts SET verified_at = ? WHERE email_hash = ?', [now, addressHash]),
+    statement(db, 'UPDATE users SET display_name = ? WHERE id = (SELECT user_id FROM school_email_accounts WHERE email_hash = ?)', [displayName, addressHash]),
     statement(db, 'INSERT INTO auth_sessions (session_hash, user_id, expires_at, created_at) SELECT ?, user_id, ?, ? FROM school_email_accounts WHERE email_hash = ?', [await hash(session), now + SESSION_LIFETIME, now, addressHash]),
     statement(db, 'DELETE FROM auth_sessions WHERE expires_at <= ?', [now]),
   ];

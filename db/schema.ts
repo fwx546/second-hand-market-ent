@@ -5,6 +5,7 @@ import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } fro
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   displayName: text("display_name").notNull().default("橘子同学"),
+  campus: text("campus").notNull().default(""),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -23,6 +24,8 @@ export const products = sqliteTable("products", {
   graduation: integer("graduation", { mode: "boolean" }).notNull().default(false),
   seller: text("seller").notNull(),
   status: text("status").notNull().default("active"),
+  soldAt: integer("sold_at"),
+  deletedAt: integer("deleted_at"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (table) => [

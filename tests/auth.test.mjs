@@ -147,6 +147,54 @@ test('successful OTP creates private random school account and hashed 7-day sess
   assert.equal(state.env.DB.sqlite.prepare('SELECT count(*) AS n FROM users').get().n, 1);
 });
 
+test('successful verification derives a bounded original-case nickname without digits or a full email', async t => {
+  for (const [email, expected] of [
+    ['  Example.Student23@STUDENT.XJTLU.EDU.CN  ', 'Example.Student'],
+    ['A1.b2%+Tag-3@student.xjtlu.edu.cn', 'A.b%+Tag-'],
+    ['123456@student.xjtlu.edu.cn', '橘子同学'],
+    [`${'Ab'.repeat(16)}123@student.xjtlu.edu.cn`, 'Ab'.repeat(10)],
+  ]) {
+    const state = setup(t), challenge = await send(state, email.toLowerCase()), verified = await verify(state, challenge, email);
+    assert.equal(verified.status, 200);
+    const user = await viewer(state, mergeCookies(challenge.cookie, verified.cookie));
+    const profile = await api(state.env, '/api/me', { viewer: user });
+    assert.equal(profile.data.user.displayName, expected);
+    assert.equal(profile.data.user.schoolVerified, false);
+    assert.equal(profile.data.user.emailVerified, true);
+    const stored = JSON.stringify({
+      users: state.env.DB.sqlite.prepare('SELECT * FROM users').all(),
+      accounts: state.env.DB.sqlite.prepare('SELECT * FROM school_email_accounts').all(),
+    });
+    assert(!stored.toLowerCase().includes(email.trim().toLowerCase()));
+    assert(!profile.data.user.displayName.includes('@'));
+  }
+});
+
+test('reverification resets only the verified account nickname; failure and existing sellers are unchanged', async t => {
+  const state = setup(t), originalEmail = 'Example.Student23@student.xjtlu.edu.cn';
+  const first = await login(state, originalEmail), user = await viewer(state, first.cookie);
+  const other = await login(state, EMAIL_B), otherUser = await viewer(state, other.cookie);
+  state.env.DB.sqlite.prepare('UPDATE users SET display_name = ? WHERE id = ?').run('手动昵称', user.userId);
+  state.env.DB.sqlite.prepare('UPDATE users SET display_name = ? WHERE id = ?').run('另一账号', otherUser.userId);
+  const photo = new FormData(); photo.append('file', new Blob([PNG], { type: 'image/png' }), 'test.png');
+  const uploaded = await api(state.env, '/api/media', { method: 'POST', viewer: user, body: photo });
+  const created = await api(state.env, '/api/products', { method: 'POST', viewer: user, body: productInput([uploaded.data.mediaId], { seller: '原商品卖家' }) });
+  assert.equal(created.status, 201);
+  state.env.DB.sqlite.prepare('UPDATE school_email_challenges SET created_at = ?').run(Date.now() - 61000);
+  const challenge = await send(state, originalEmail, first.cookie), actual = state.sent.at(-1).code;
+  const wrong = actual === '000000' ? '000001' : '000000';
+  assert.equal((await verify(state, challenge, originalEmail, mergeCookies(first.cookie, challenge.cookie), wrong)).status, 400);
+  assert.equal(state.env.DB.sqlite.prepare('SELECT display_name FROM users WHERE id = ?').get(user.userId).display_name, '手动昵称');
+  assert.equal((await verify(state, challenge, EMAIL_B, mergeCookies(first.cookie, challenge.cookie), actual)).status, 400);
+  assert.equal(state.env.DB.sqlite.prepare('SELECT display_name FROM users WHERE id = ?').get(otherUser.userId).display_name, '另一账号');
+  const successful = await verify(state, challenge, 'eXaMpLe.sTuDeNt23@STUDENT.XJTLU.EDU.CN', mergeCookies(first.cookie, challenge.cookie));
+  assert.equal(successful.status, 200);
+  assert.equal(state.env.DB.sqlite.prepare('SELECT display_name FROM users WHERE id = ?').get(user.userId).display_name, 'eXaMpLe.sTuDeNt');
+  assert.equal(state.env.DB.sqlite.prepare('SELECT display_name FROM users WHERE id = ?').get(otherUser.userId).display_name, '另一账号');
+  assert.equal((await api(state.env, `/api/products/${created.data.product.id}`)).data.product.seller, '原商品卖家');
+  assert.equal(state.env.DB.sqlite.prepare('SELECT count(*) AS n FROM users').get().n, 2);
+});
+
 test('challenge is bound to browser and email; concurrent replay creates only one session', async t => {
   const state = setup(t), challenge = await send(state), fakeCookie = `__Host-juzi_school_browser=${'A'.repeat(43)}`;
   assert.equal((await verify(state, challenge, EMAIL_B)).status, 400);

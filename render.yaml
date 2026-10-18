@@ -1,0 +1,38 @@
+# Paid deployment: review the current Render price before creating this Blueprint.
+# Never put actual credentials or user email addresses in this file.
+services:
+  - type: web
+    name: juzi-qq-mail-relay
+    runtime: node
+    rootDir: relay
+    region: singapore
+    plan: 0.5c-512mb
+    numInstances: 1
+    autoDeployTrigger: "off"
+    buildCommand: npm ci --omit=dev
+    startCommand: node run.mjs
+    healthCheckPath: /healthz
+    maxShutdownDelaySeconds: 30
+    disk:
+      name: juzi-relay-ledger
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22.16.0"
+      - key: NODE_ENV
+        value: production
+      - key: JUZI_RELAY_MODE
+        value: production
+      - key: QQ_RELAY_DATA_DIR
+        value: /var/data
+      - key: QQ_RELAY_DB_PATH
+        value: /var/data/relay.sqlite
+      - key: QQ_RELAY_DAILY_LIMIT
+        value: "50"
+      - key: QQ_SMTP_USER
+        sync: false
+      - key: QQ_SMTP_AUTH_CODE
+        sync: false
+      - key: JUZI_RELAY_TOKEN
+        sync: false
