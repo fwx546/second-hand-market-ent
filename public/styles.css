@@ -1027,6 +1027,106 @@ button:disabled { transform: none !important; }
 }
 @media (prefers-reduced-motion: reduce) { .loading-spinner { animation: none; } }
 
+.login-page { max-width: 820px; margin: 14px auto 30px; }
+.login-intro { text-align: center; margin: 0 0 29px; }
+.login-intro .eyebrow { color: #b1844b; background: #fff5dc; border-color: #f0e0bc; font-size: 9px; }
+.login-intro h1 { font-size: 31px; letter-spacing: -.8px; margin: 0 0 11px; }
+.login-intro h1 > span { display: inline-block; margin-left: 5px; font-size: 29px; }
+.login-intro > p { font-size: 12px; color: #8b7761; margin: 0; }
+.login-panel { border: 1px solid #eee4d4; border-radius: 23px; padding: 29px; background: white; box-shadow: 0 8px 28px #6c492007; }
+.login-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
+.login-panel-heading h2 { font-size: 19px; margin: 0; letter-spacing: -.3px; }
+.login-panel-heading .badge { font-size: 10px; padding: 4px 9px; }
+.login-methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.login-method { position: relative; padding: 23px 21px 20px; background: #faf8f3; border: 1px solid #eee6da; border-radius: 15px; min-width: 0; }
+.login-method.is-enabled { background: #fffaf0; border-color: #f1ddb8; }
+.login-method-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 15px; background: #fff0ce; font-size: 27px; margin-bottom: 16px; }
+.login-method-icon.wechat { background: #eaf2df; }
+.login-method h2 { font-size: 17px; margin: 0 0 8px; }
+.login-method p { color: #8d7b65; font-size: 11px; line-height: 1.9; margin: 0; }
+.login-method-status { position: absolute; right: 15px; top: 16px; color: #8b7c69; background: #ece7dd; border-radius: 6px; font-size: 10px; padding: 3px 7px; }
+.login-method.is-enabled .login-method-status { color: #61794b; background: #e9f1df; }
+.external-login-action { margin-top: 23px; text-align: center; }
+.external-login-action > .button { width: 100%; min-height: 47px; }
+.external-login-action > .button:disabled { background: #efe8dc; color: #7f705e; opacity: 1; box-shadow: none; cursor: not-allowed; }
+.external-login-action > p { margin: 11px 0 0; color: #907c63; font-size: 10px; }
+.login-platform { padding: 25px 0 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 13px; }
+.login-platform > span { display: flex; align-items: center; gap: 14px; color: #ab957b; font-size: 10px; }
+.login-platform > span::before, .login-platform > span::after { content: ""; width: 54px; height: 1px; background: #e9e1d4; }
+.login-platform .button { min-width: 260px; background: #fffdf8; }
+.login-platform > small { max-width: 440px; color: #6b8099; font-size: 10px; line-height: 1.8; }
+.login-identity-note { display: flex; justify-content: center; align-items: flex-start; gap: 6px; font-size: 10px; color: #897960; margin: 23px 0 11px; line-height: 1.9; text-align: center; }
+.login-identity-note .icon { width: 14px; height: 14px; margin-top: 2px; color: #8b9c73; }
+.login-back-link { display: flex; align-items: center; justify-content: center; gap: 5px; width: fit-content; margin-inline: auto; font-size: 11px; }
+.login-back-link .icon { width: 13px; height: 13px; }
+.login-callback-error, .login-draft-warning { margin-bottom: 19px; border: 1px solid #efcdb6; padding: 16px 19px; border-radius: 13px; background: #fff2e9; color: #8c512d; font-size: 12px; line-height: 1.8; }
+.login-callback-error { display: flex; align-items: flex-start; gap: 10px; }
+.login-callback-error > .icon { width: 19px; height: 19px; margin-top: 3px; }
+.login-callback-error strong, .login-draft-warning strong { font-size: 12px; }
+.login-callback-error p, .login-draft-warning p { margin: 5px 0 0; font-size: 11px; }
+.login-callback-error small { display: block; font-size: 10px; margin-top: 5px; }
+.login-draft-warning { background: #fff8df; border-color: #efdfad; color: #96783c; }
+.login-draft-warning .text-button { margin-top: 5px; font-size: 11px; color: #a06f31; }
+.login-draft-warning .icon { width: 13px; height: 13px; }
+.login-current-account { display: flex; align-items: center; gap: 13px; padding: 18px 20px; margin-bottom: 20px; background: #f2f5e9; border: 1px solid #e4e9d5; border-radius: 14px; }
+.login-current-account > .profile-avatar { width: 43px; height: 43px; font-size: 24px; border-width: 2px; border-radius: 14px; box-shadow: none; }
+.login-current-account > div { flex: 1; min-width: 0; }
+.login-current-account strong { font-size: 12px; }
+.login-current-account p { margin: 3px 0 0; color: #8b9678; font-size: 10px; }
+.login-current-account > .text-button { font-size: 10px; white-space: nowrap; }
+.account-switch-note { font-size: 10px; color: #a18a6f; margin: 13px 0 0; text-align: center; }
+.login-no-method { text-align: center; color: #947e62; margin-top: 22px; font-size: 12px; }
+.logout-draft-warning { background: #fff5d8; color: #927336 !important; border-radius: 10px; padding: 13px; font-size: 11px !important; }
+@media (max-width: 767px) {
+  .login-page { margin-top: 8px; margin-bottom: 10px; }
+  .login-intro { margin-bottom: 22px; }
+  .login-intro .eyebrow { font-size: 7px; padding: 4px 7px; margin-bottom: 12px; }
+  .login-intro h1 { font-size: 25px; line-height: 1.5; margin-bottom: 8px; letter-spacing: -.5px; }
+  .login-intro h1 > span { font-size: 24px; margin-left: 2px; }
+  .login-intro > p { font-size: 11px; max-width: 290px; margin-inline: auto; line-height: 1.9; }
+  .login-panel { padding: 20px 17px; border-radius: 18px; }
+  .login-panel-heading { margin-bottom: 17px; gap: 9px; }
+  .login-panel-heading h2 { font-size: 17px; }
+  .login-panel-heading .badge { font-size: 9px; padding: 3px 7px; }
+  .login-methods { grid-template-columns: 1fr; gap: 11px; }
+  .login-method { display: flex; align-items: flex-start; gap: 13px; padding: 19px 14px; border-radius: 12px; }
+  .login-method-icon { width: 42px; height: 42px; border-radius: 13px; font-size: 25px; margin: 0; flex-shrink: 0; }
+  .login-method > div { min-width: 0; padding-top: 1px; }
+  .login-method h2 { font-size: 15px; margin-bottom: 7px; padding-right: 52px; }
+  .login-method p { font-size: 10px; line-height: 1.8; }
+  .login-method-status { font-size: 9px; top: 19px; right: 12px; padding: 2px 6px; }
+  .external-login-action { margin-top: 18px; }
+  .external-login-action > .button { font-size: 12px; min-height: 44px; padding-inline: 8px; }
+  .external-login-action > p { font-size: 10px; line-height: 1.9; margin-top: 10px; }
+  .login-platform { padding-top: 23px; gap: 12px; }
+  .login-platform > .button { font-size: 12px; min-height: 43px; min-width: 245px; }
+  .login-platform > small { font-size: 10px; }
+  .login-identity-note { font-size: 10px; margin-top: 22px; padding-inline: 9px; }
+  .login-back-link { font-size: 10px; }
+  .login-callback-error, .login-draft-warning { padding: 14px; border-radius: 11px; margin-bottom: 16px; font-size: 11px; }
+  .login-callback-error strong, .login-draft-warning strong { font-size: 11px; }
+  .login-callback-error p, .login-draft-warning p { font-size: 10px; }
+  .login-current-account { gap: 10px; padding: 15px; border-radius: 12px; flex-wrap: wrap; }
+  .login-current-account > .profile-avatar { width: 37px; height: 37px; font-size: 21px; border-radius: 12px; }
+  .login-current-account > div { flex-basis: calc(100% - 50px); }
+  .login-current-account strong { font-size: 11px; }
+  .login-current-account p { font-size: 9px; }
+  .login-current-account > .button { flex: 1; margin-top: 3px; font-size: 10px; }
+  .login-current-account > .text-button { flex: 1; text-align: center; }
+  .account-switch-note { font-size: 9px; line-height: 1.9; }
+}
+@media (max-width: 374px) {
+  .login-intro h1 { font-size: 22px; }
+  .login-intro h1 > span { font-size: 20px; }
+  .login-panel { padding: 17px 13px; }
+  .login-panel-heading h2 { font-size: 15px; }
+  .login-method { gap: 10px; padding-inline: 11px; }
+  .login-method-icon { width: 36px; height: 36px; font-size: 22px; border-radius: 11px; }
+  .login-method h2 { font-size: 14px; }
+  .login-method p { font-size: 10px; }
+  .login-platform > .button { min-width: 225px; }
+}
+
 @media print {
   .site-header, .demo-strip, .site-footer, .mobile-nav, .favorite-button, .detail-actions, .sticky-detail-actions, .modal-backdrop { display: none !important; }
   body { padding: 0; background: white; }

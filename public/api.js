@@ -17,6 +17,7 @@ const productPath=id=>`/api/products/${encodeURIComponent(id)}`;
 async function itemList(path){const data=await request(path);if(!Array.isArray(data.items))throw new ApiError('商品列表格式不完整，请稍后重试。');return data;}
 export const api={
   session:async()=>{const data=await request('/api/me');if(!data||!Object.hasOwn(data,'user'))throw new ApiError('登录状态暂时无法读取，请稍后重试。');return data;},
+  logout:()=>request('/api/auth/logout',{method:'POST',body:{}}),
   products:async(filters,page=1)=>{const params=new URLSearchParams({page:String(page),pageSize:'24'});for(const [key,value]of Object.entries(filters))if(value!==''&&value!==false)params.set(key,value===true?'1':String(value));const data=await itemList(`/api/products?${params}`);if(!Number.isFinite(data.total)||!data.categoryCounts)throw new ApiError('商品统计格式不完整，请稍后重试。');return data;},
   product:id=>request(productPath(id)),contact:id=>request(`${productPath(id)}/contact`),
   mine:()=>itemList('/api/me/products'),favorites:()=>itemList('/api/me/favorites'),

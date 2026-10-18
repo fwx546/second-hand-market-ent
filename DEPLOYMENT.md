@@ -35,6 +35,8 @@ npm run dev
 
 portable 预览账号 `local_seedy` / `seedy@sites.test` 是开发模拟身份。正式站点使用平台 ChatGPT 登录，不能把模拟账号、手写身份头或本地预览结果当作正式认证流程。当前没有学校身份验证。
 
+新增的外部登录支持通用 OIDC 托管页，默认关闭。以 Authing 为例的开通步骤、RS256 要求和完整配置见 [AUTH_SETUP.md](AUTH_SETUP.md)。本地复制 [.env.example](.env.example) 为 `.env.local` 后填写；不要把服务端配置加上公开前缀或写进浏览器资源。新增认证迁移仍按“构建 → 本地迁移 → 启动”的顺序验证，不添加真实账号种子。
+
 当前已记录 15 项后端测试通过。真实本地运行时的 HTTP 联测和浏览器 UI 操作应保留独立结果；浏览器文件选择器尚未成功调起，因此上传 UI 仍需手动或可用的浏览器操作环境补验，不能仅凭上传接口返回成功就记为端到端通过。
 
 有 schema 变更时，先修改 `db/schema.ts` 并运行 `npm run db:generate`，审查新增迁移，再执行上述构建与本地验证。已应用迁移不能改写；不要在迁移中插入演示商品或真实个人数据。
@@ -49,6 +51,8 @@ portable 预览账号 `local_seedy` / `seedy@sites.test` 是开发模拟身份�
 
 **GitHub push 或 PR 合并不会自动部署 Sites。** 当前没有因此自动触发的生产发布流程。源码归档不能包含 `.wrangler/`、`.sites-runtime/`、登录状态、Cookie、访问令牌、真实数据库导出或私人照片。
 
+外部登录的生产配置由具有项目权限的维护者通过 Sites 环境设置工具或界面注入：`JUZI_AUTH_ISSUER`、`JUZI_AUTH_CLIENT_ID`、`JUZI_AUTH_TOKEN_AUTH_METHOD`、按需的 `JUZI_AUTH_CLIENT_SECRET`、`JUZI_AUTH_ORIGIN` 及两种登录方式的启用开关。Client Secret 使用服务端秘密值，不写入源码归档或托管清单。当前生产 Origin 为 `https://juzi-campus-market.open-bloom-6517.chatgpt.site`，精确回调为其 `/api/auth/callback`；保留 Sites 自身的 `/callback`。服务商控制台应先完成手机号和微信开通，再将对应开关改为 `true`。
+
 ## 数据上线与验收
 
 正式库从空数据开始，**不导入旧 18 件假商品，不导入旧 IndexedDB，不以设计稿演示数据填充生产**。`design/demo-data.js` 与 SVG 仅供设计生成，不进入公开应用数据目录或迁移。
@@ -61,6 +65,8 @@ portable 预览账号 `local_seedy` / `seedy@sites.test` 是开发模拟身份�
 - 上架照片能从 R2 读取；未发布照片只对上传者可见。下架后，其他用户不能继续读取该商品详情或联系方式；未被其他上架商品复用的照片也不再公开读取。
 - 登录读取联系方式的接口与公开商品接口分离；所有者账号 ID 不出现在公开商品 DTO 中。
 - 页面刷新、校区筛选、移动布局和接口失败提示正常，新增迁移没有破坏已有记录。
+
+外部认证另需完成手机号短信、微信授权、本站回调与退出的真实验收，步骤见 [AUTH_SETUP.md](AUTH_SETUP.md)。未开通时应保持默认关闭；受控 OIDC 协议测试不能记为真实短信发送或微信授权已通过。账号不会按手机号或邮箱自动合并已有 ChatGPT 记录。外部登出清除本站会话并继续平台登出，不主动注销服务商 SSO。
 
 在本次线上复测完成之前，上述路径不能自动标记为已通过。若仍遇 Cloudflare 拦截，应记录具体失败位置并继续核查；本地成功不能替代生产验收，也不据旧版访问问题宣称新版已经失败。
 

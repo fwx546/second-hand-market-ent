@@ -68,3 +68,28 @@ export const favorites = sqliteTable("favorites", {
   productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
   createdAt: integer("created_at").notNull(),
 }, (table) => [primaryKey({ columns: [table.userId, table.productId] })]);
+
+// Ten-minute, browser-bound, one-use OIDC transactions. No provider tokens or profile data.
+export const authFlows = sqliteTable("auth_flows", {
+  stateHash: text("state_hash").primaryKey(),
+  bindingHash: text("binding_hash").notNull(),
+  codeVerifier: text("code_verifier").notNull(),
+  nonce: text("nonce").notNull(),
+  issuer: text("issuer").notNull(),
+  clientId: text("client_id").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  returnTo: text("return_to").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [index("auth_flows_expiry").on(table.expiresAt)]);
+
+// Only SHA-256 of the browser's random opaque session token is stored.
+export const authSessions = sqliteTable("auth_sessions", {
+  sessionHash: text("session_hash").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: integer("expires_at").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [
+  index("auth_sessions_expiry").on(table.expiresAt),
+  index("auth_sessions_user").on(table.userId),
+]);

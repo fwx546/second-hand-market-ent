@@ -24,7 +24,7 @@ function requireBucket(env) {
   return env.BUCKET;
 }
 function requireViewer(viewer) {
-  if (!viewer?.userId) fail(401, 'AUTH_REQUIRED', '请先使用 ChatGPT 登录。');
+  if (!viewer?.userId) fail(401, 'AUTH_REQUIRED', '请先登录。');
   return viewer.userId;
 }
 function requireOrigin(request) {
@@ -300,13 +300,13 @@ async function getMedia(env, db, mediaId, viewer) {
 }
 
 /**
- * Platform identity is supplied only by the trusted route wrapper, never request JSON/headers.
+ * Verified identity is supplied only by the trusted route wrapper, never request JSON/headers.
  * @param {Request} request
  * @param {{DB?: any, BUCKET?: any}} env
- * @param {{userId: string}|null} viewer
- * @param {{development?: boolean}} [options]
+ * @param {{userId: string, provider?: string}|null} viewer
+ * @param {{development?: boolean, authentication?: object}} [options]
  */
-export async function handleMarket(request, env, viewer = null, { development = false } = {}) {
+export async function handleMarket(request, env, viewer = null, { development = false, authentication } = {}) {
   try {
     const method = request.method.toUpperCase(), url = new URL(request.url);
     if (!['GET', 'POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) fail(405, 'METHOD_NOT_ALLOWED', '此请求方式不受支持。');
@@ -319,6 +319,11 @@ export async function handleMarket(request, env, viewer = null, { development = 
         development: development === true,
         user: viewer ? { id: viewer.userId, displayName: stored?.display_name || '橘子同学', schoolVerified: false } : null,
         signInUrl: '/signin-with-chatgpt?return_to=%2F%23%2F', signOutUrl: '/signout-with-chatgpt?return_to=%2F%23%2F',
+        authentication: authentication || {
+          provider: viewer ? (viewer.provider === 'external' ? 'external' : 'chatgpt') : null,
+          external: { configured: false, methods: { phone: false, wechat: false }, startUrl: '/api/auth/start' },
+          platform: { enabled: true, signInUrl: '/signin-with-chatgpt?return_to=%2F%23%2F', signOutUrl: '/signout-with-chatgpt?return_to=%2F' },
+        },
         capabilities: { canPublish: Boolean(viewer), canViewContact: Boolean(viewer), canFavorite: Boolean(viewer), schoolVerificationRequired: false },
       });
     }
