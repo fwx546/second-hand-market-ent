@@ -20,7 +20,7 @@ $qualityParameters.Param[0] = New-Object Drawing.Imaging.EncoderParameter([Drawi
 foreach ($file in Get-ChildItem -LiteralPath $assetRoot -Filter *.jpg) {
   $original = [Drawing.Image]::FromFile($file.FullName)
   try {
-    $scale = [Math]::Min(1, $MaxSide / [Math]::Max($original.Width, $original.Height))
+    $scale = [Math]::Min(1.0, [double]$MaxSide / [Math]::Max($original.Width, $original.Height))
     $width = [Math]::Max(1,[int][Math]::Round($original.Width * $scale))
     $height = [Math]::Max(1,[int][Math]::Round($original.Height * $scale))
     $thumbnail = New-Object Drawing.Bitmap($width,$height)
