@@ -1,0 +1,15 @@
+{
+  "name": "juzi-campus-market",
+  "version": "0.1.0",
+  "private": true,
+  "description": "西交利物浦大学 SIP / 太仓校区二手交易演示",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "check": "node scripts/check.mjs",
+    "design": "node scripts/design-export.mjs"
+  }
+}

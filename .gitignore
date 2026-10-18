@@ -3,3 +3,9 @@ node_modules/
 artifacts/
 *.tar.gz
 *.log
+.tools/
+.repo-backups/
+.migration-staging/
+.env
+.env.*
+!.env.example
