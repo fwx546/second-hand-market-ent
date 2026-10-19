@@ -125,7 +125,7 @@ function readCookie(request, name) {
 }
 function clearedCookies(settings) {
   // Keep the non-login browser binding: clearing it on guest/logout would reset its send budget.
-  const names = ['__Host-juzi_school_session', 'juzi_dev_school_session', '__Host-juzi_session', 'juzi_dev_session', '__Host-juzi_auth_flow', 'juzi_dev_auth_flow'];
+  const names = ['__Host-juzi_school_session', 'juzi_dev_school_session', '__Host-juzi_session', 'juzi_dev_session', '__Host-juzi_auth_flow', 'juzi_dev_auth_flow', 'juzi_dev_preview'];
   return names.map(name => cookie(name, '', 0, name.startsWith('__Host-') || settings.secure));
 }
 function statement(db, sql, values = []) { return db.prepare(sql).bind(...values); }

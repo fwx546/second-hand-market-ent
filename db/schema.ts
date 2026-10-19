@@ -6,6 +6,13 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   displayName: text("display_name").notNull().default("橘子同学"),
   campus: text("campus").notNull().default(""),
+  publishSeller: text("publish_seller").notNull().default(""),
+  publishContactType: text("publish_contact_type").notNull().default(""),
+  publishContactValue: text("publish_contact_value").notNull().default(""),
+  language: text("language").notNull().default("zh"),
+  phone: text("phone").notNull().default(""),
+  wechat: text("wechat").notNull().default(""),
+  qq: text("qq").notNull().default(""),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -36,7 +43,7 @@ export const products = sqliteTable("products", {
   check("products_status_valid", sql`${table.status} IN ('active', 'inactive')`),
   check("products_category_valid", sql`${table.category} IN ('appliance', 'ebike', 'daily')`),
   check("products_campus_valid", sql`${table.campus} IN ('SIP 校区', '太仓校区')`),
-  check("products_condition_valid", sql`${table.condition} IN ('几乎全新', '九成新', '八成新')`),
+  check("products_condition_valid", sql`${table.condition} IN ('全新', '几乎全新', '轻微使用痕迹', '明显使用痕迹')`),
 ]);
 
 export const privateContacts = sqliteTable("private_contacts", {
@@ -72,6 +79,27 @@ export const favorites = sqliteTable("favorites", {
   productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
   createdAt: integer("created_at").notNull(),
 }, (table) => [primaryKey({ columns: [table.userId, table.productId] })]);
+
+export const conversations = sqliteTable("conversations", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  buyerId: text("buyer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sellerId: text("seller_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("conversations_product_buyer").on(table.productId, table.buyerId),
+  index("conversations_buyer_updated").on(table.buyerId, table.updatedAt),
+  index("conversations_seller_updated").on(table.sellerId, table.updatedAt),
+]);
+
+export const messages = sqliteTable("messages", {
+  id: text("id").primaryKey(),
+  conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  senderId: text("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [index("messages_conversation_time").on(table.conversationId, table.createdAt)]);
 
 // Ten-minute, browser-bound, one-use OIDC transactions. No provider tokens or profile data.
 export const authFlows = sqliteTable("auth_flows", {

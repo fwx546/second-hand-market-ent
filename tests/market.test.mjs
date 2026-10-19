@@ -17,7 +17,7 @@ test('empty schema fixture; identity never publishes account email or full name'
   assert.equal(anonymous.data.development, false);
   assert.equal(anonymous.data.capabilities.canPublish, false);
   const loggedIn = await api(env, '/api/me', { viewer: { ...A, email: 'private@school.edu', displayName: 'PRIVATE_FULL_NAME' } });
-  assert.deepEqual(loggedIn.data.user, { id: A.userId, displayName: '橘子同学', campus: '', schoolVerified: false, emailVerified: true, emailMasked: A.emailMasked });
+  assert.deepEqual(loggedIn.data.user, { id: A.userId, displayName: '橘子同学', campus: '', publishSeller: '', publishContactType: '', publishContactValue: '', language: 'zh', phone: '', wechat: '', qq: '', schoolVerified: false, emailVerified: true, emailMasked: A.emailMasked });
   assert.equal(loggedIn.data.capabilities.canPublish, true);
   assert.equal(loggedIn.data.signInUrl, '/#/login');
   assert.equal(loggedIn.data.authentication.provider, 'school_email');
@@ -167,6 +167,23 @@ test('server-side form validation and parameterized search', async t => {
   assert.equal((await api(env, `/api/products/${created.data.product.id}`, { method: 'PATCH', viewer: A, body: { status: 'archived' } })).status, 400);
   assert.equal((await api(env, '/api/products', { method: 'POST', viewer: A, body: '{broken' })).status, 400);
   assert.equal((await api(env, '/api/products', { method: 'POST', viewer: A, body: { ...input, description: 'x'.repeat(70000) } })).status, 413);
+});
+
+test('daily goods can be published and edited without a size', async t => {
+  const env = fixture(t);
+  const noSize = { category: 'daily', specs: { 数量: '一个', 使用情况: '正常' } };
+  const created = await publish(env, A, noSize);
+  assert.equal(created.status, 201);
+  assert.deepEqual(created.data.product.specs, noSize.specs);
+  const path = `/api/products/${created.data.product.id}`;
+  const withSize = await api(env, path, { method: 'PATCH', viewer: A, body: { specs: { 尺寸: '小号', ...noSize.specs } } });
+  assert.equal(withSize.status, 200);
+  assert.equal(withSize.data.product.specs.尺寸, '小号');
+  const cleared = await api(env, path, { method: 'PATCH', viewer: A, body: { specs: { 尺寸: '', ...noSize.specs } } });
+  assert.equal(cleared.status, 200);
+  assert.deepEqual(cleared.data.product.specs, noSize.specs);
+  const invalid = await publish(env, B, { category: 'daily', specs: { 数量: '一个' } });
+  assert.equal(invalid.status, 400);
 });
 
 test('filters, totals, category counts, stable pagination and sorting reflect database', async t => {

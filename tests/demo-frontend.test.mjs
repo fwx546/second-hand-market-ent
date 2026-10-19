@@ -8,7 +8,7 @@ import { DEMO_CATALOG } from '../server/demo-catalog.mjs';
 const source=(await readFile(new URL('../public/app.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'').replace(/await refreshSession\(\);\s*$/,'');
 const guest={user:null,development:false,authentication:{provider:'guest',email:{configured:true}}};
 const member={user:{id:'school_test',emailVerified:true,displayName:'测试同学'},authentication:{provider:'school_email',email:{configured:true}}};
-const sample={id:Object.keys(DEMO_CATALOG)[0],isDemo:true,title:'示例小风扇',seller:'橘子集示例角色',price:35,originalPrice:79,status:'active',campus:'SIP 校区',category:'appliance',condition:'九成新',location:'示例地点',description:'此内容为虚构示例。',images:[Object.values(DEMO_CATALOG)[0]],specs:{型号:'示例型号'},createdAt:Date.now()};
+const sample={id:Object.keys(DEMO_CATALOG)[0],isDemo:true,title:'示例小风扇',seller:'橘子集示例角色',price:35,originalPrice:79,status:'active',campus:'SIP 校区',category:'appliance',condition:'轻微使用痕迹',location:'示例地点',description:'此内容为虚构示例。',images:[Object.values(DEMO_CATALOG)[0]],specs:{型号:'示例型号'},createdAt:Date.now()};
 
 function client(session=guest,api={}){
   const modal={innerHTML:'',hasChildNodes(){return Boolean(this.innerHTML);}};
@@ -38,7 +38,7 @@ test('demo stock photos require the explicit demo flag and a known local filenam
 test('example cards and both detail contact controls identify fiction in guest and member views',()=>{
   for(const session of [guest,member]){
     const c=client(session),html=c.detail(sample),card=c.card(sample);
-    assert(card.includes('示例商品'));assert(card.includes('九成新'));assert(card.includes('示例展示'));
+    assert(card.includes('示例商品'));assert(card.includes('轻微使用痕迹'));assert(card.includes('示例展示'));
     assert(html.includes('虚构示例，仅供浏览与收藏，不可交易。'));
     assert(html.includes('虚构示例角色 · 不是真实卖家'));
     assert(html.includes('示例配图 · 商品信息均为虚构'));

@@ -88,7 +88,7 @@ export async function api(env, path, options = {}) {
 export function productInput(imageIds, extra = {}) {
   return {
     title: '书桌小风扇', category: 'appliance', price: 35.25, originalPrice: 129,
-    condition: '九成新', campus: 'SIP 校区', location: '图书馆公共入口',
+    condition: '轻微使用痕迹', campus: 'SIP 校区', location: '图书馆公共入口',
     description: '使用一学期，运行正常，可面交试用。', specs: { 型号: 'USB桌面风扇', 使用情况: '使用一学期' },
     graduation: false, seller: '小橘同学', contactType: 'wechat', contactValue: 'juzi_test_contact', imageIds, ...extra,
   };

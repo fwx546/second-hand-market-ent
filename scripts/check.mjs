@@ -39,6 +39,11 @@ for(const name of migrations){
       assert(!/\b(?:UPDATE|DELETE|DROP|REPLACE|TRUNCATE)\b|\bINSERT\s+(?:OR\s+IGNORE\s+)?INTO\s+(?:school_|auth_|private_contacts|media\b|product_media\b)/i.test(seed),'Demo migration may only add public catalog rows');
     }
     assert.equal(ids.size,18,'Every demo listing must have its own stable ID');
-  } else assert(!/\bINSERT\s+(?:OR\s+\w+\s+)?INTO\b/i.test(sql),'Other migrations must not seed product or user records');
+  } else {
+    const inserts=sql.split('--> statement-breakpoint').map(value=>value.trim()).filter(value=>/^INSERT\b/i.test(value));
+    // Rebuilding products to update its CHECK constraint must copy existing rows;
+    // only allow that data-preserving INSERT...SELECT, never seed new user/listing rows.
+    assert(inserts.every(statement=>/^INSERT INTO `__new_products`\([\s\S]*\) SELECT[\s\S]* FROM `products`;$/i.test(statement)),'Other migrations must not seed product or user records');
+  }
 }
 console.log('PASS: server entry, D1/R2 bindings, database frontend, syntax, additive schema and explicitly requested demo catalog');

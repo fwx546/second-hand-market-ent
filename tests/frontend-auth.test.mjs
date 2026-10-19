@@ -17,7 +17,7 @@ function client(session=guestSession(),api={}){
   const context={URL,URLSearchParams,FormData:TestFormData,console,api,categories:[],location,history:{replaceState(_a,_b,hash){location.hash=hash;}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},
     document:{querySelector:s=>elements[s]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(){},body:{classList:{add(){},remove(){}}}},
     window:{scrollTo(){},top:{location:{assign(path){navigation.push(path);}}},addEventListener(name,fn){events.set(name,fn);}}};
-  vm.runInNewContext(`${source}\nglobalThis.test={state,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,detail,newDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,discardDraft,publish,saveDraft};`,context);
+  vm.runInNewContext(`${source}\nglobalThis.test={state,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,discardDraft,publish,saveDraft};`,context);
   context.test.state.session=session;
   return{...context.test,context,elements,modalRoot,events,navigation};
 }
@@ -29,6 +29,35 @@ test('only school-email verification establishes business identity, including in
   assert(!client(guestSession()).signedIn());
   assert(!client({user:{id:'local_seedy'},development:true,authentication:{provider:'chatgpt'}}).signedIn());
   assert(!client({user:{id:'legacy'},authentication:{provider:'external'}}).signedIn());
+});
+
+test('local preview entry opens the private profile without claiming email verification',async()=>{
+  const initial=guestSession(false);initial.development=true;initial.authentication.preview={enabled:true};
+  const preview={...initial,user:{id:'local_preview',displayName:'本地体验账号',campus:'',preview:true,emailVerified:false,emailMasked:null},authentication:{...initial.authentication,provider:'local_preview'}};
+  const c=client(initial,{preview:async()=>({ok:true}),session:async()=>preview});
+  c.context.location.hash='#/login?return_to=%2F%23%2Fprofile';
+  assert(c.loginPage(new URLSearchParams()).includes('进入本地体验账号'));
+  await c.localPreviewLogin();
+  assert(c.signedIn());
+  assert.equal(c.context.location.hash,'/profile');
+  assert(c.profile().includes('本地模拟登录 · 未验证学校邮箱'));
+  c.editProfile();
+  assert(c.modalRoot.innerHTML.includes('本地体验账号的资料只保存在本机'));
+  assert(!c.modalRoot.innerHTML.includes('下次邮箱验证码登录成功后'));
+});
+
+test('profile settings move logout below language and private contact controls',()=>{
+  const session=schoolSession();Object.assign(session.user,{displayName:'小橘',language:'zh',phone:'13800138000',wechat:'Orange_123',qq:'12345678'});
+  const c=client(session),profile=c.profile(),settings=c.settingsPage();
+  assert(profile.includes('href="#/settings"'));
+  assert(!profile.includes('profile-logout'));
+  assert(settings.indexOf('语言')<settings.indexOf('信息管理'));
+  assert(settings.indexOf('信息管理')<settings.indexOf('data-action="logout"'));
+  for(const field of ['phone','wechat','qq'])assert(settings.includes(`name="${field}"`));
+  session.user.language='en';
+  assert(c.settingsPage().includes('Contact information'));
+  assert(c.settingsPage().includes('Log out'));
+  assert.equal(c.safeReturnTo('/#/settings'),'/#/settings');
 });
 
 test('login exposes school email and guest only; unavailable mail is not fake delivery',()=>{
@@ -144,6 +173,36 @@ test('profile defaults populate a clean new draft and profile edits do not mutat
   const form={reportValidity:()=>true,elements:[{disabled:false}],_values:[['displayName',' 新昵称 '],['campus','SIP 校区']]};
   await c.saveProfile(form);assert.equal(body.displayName,'新昵称');assert.equal(body.campus,'SIP 校区');assert.equal(c.state.session.user.displayName,'新昵称');
   assert.equal(c.state.draft.fields.seller,'小橘子');assert.equal(c.state.draft.fields.campus,'太仓校区');assert(c.profile().includes('你好，新昵称！'));
+});
+
+test('new publication uses saved contact defaults while editing keeps the listing contact',()=>{
+  const session=schoolSession();Object.assign(session.user,{displayName:'账号昵称',publishSeller:'常用卖家',publishContactType:'qq',publishContactValue:'123456789'});
+  const c=client(session),draft=c.newDraft();
+  assert.equal(draft.fields.seller,'常用卖家');
+  assert.equal(draft.fields.contactType,'qq');
+  assert.equal(draft.fields.contactValue,'123456789');
+  draft.fields.contactValue='可修改';
+  assert.equal(c.newDraft().fields.contactValue,'123456789');
+  const edited=c.newDraft({id:'own-listing',category:'appliance',seller:'商品卖家',images:[]},{type:'wechat',value:'listing_wechat'});
+  assert.equal(edited.fields.seller,'商品卖家');
+  assert.equal(edited.fields.contactType,'wechat');
+  assert.equal(edited.fields.contactValue,'listing_wechat');
+  c.state.draft=draft;
+  assert(c.publish().includes('下次发布自动填入，仍可修改'));
+});
+
+test('daily goods size has no required marker and is omitted when empty',()=>{
+  const c=client(schoolSession());
+  const draft=c.newDraft();c.state.draft=draft;
+  Object.assign(draft.fields,{title:'生活用品',category:'daily',price:'20',description:'使用情况良好',location:'图书馆门口',seller:'卖家',contactValue:'seller_wechat'});
+  draft.specs.daily={尺寸:'',数量:'一个',使用情况:'正常'};
+  draft.images=[{url:'/api/media/photo',mediaId:'photo'}];
+  c.elements['#publish-form']={reportValidity:()=>true,_values:[]};
+  assert.match(c.categoryFields(draft),/<label for="field-spec-0">尺寸<\/label><input[^>]*name="spec-0"[^>]*>/);
+  assert(!c.categoryFields(draft).match(/name="spec-0"[^>]*required/));
+  assert.deepEqual(Object.keys(c.validateDraft().specs),['数量','使用情况']);
+  draft.specs.daily.尺寸='小号';
+  assert.equal(c.validateDraft().specs.尺寸,'小号');
 });
 
 test('401 discards private caches but preserves account-bound draft for same-account reauthentication',async()=>{

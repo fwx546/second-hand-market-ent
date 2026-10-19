@@ -36,6 +36,34 @@
       "when": 1792328752076,
       "tag": "0004_public_demo_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792400602443,
+      "tag": "0005_glorious_dorian_gray",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792403462786,
+      "tag": "0006_overrated_wind_dancer",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1792404155570,
+      "tag": "0007_living_the_fury",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792405420485,
+      "tag": "0008_nosy_pyro",
+      "breakpoints": true
     }
   ]
 }
