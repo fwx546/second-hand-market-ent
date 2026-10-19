@@ -1,0 +1,35 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "juzi-campus-market",
+  "main": "./worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./.output/public",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api",
+      "/api/*"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "juzi-campus-market",
+      "database_id": "c89e9c33-9310-4219-a604-5ef38797b2e5",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "vars": {
+    "JUZI_SITE_ENABLED": "false",
+    "JUZI_EMAIL_ENABLED": "true",
+    "JUZI_EMAIL_PROVIDER": "gmail_apps_script",
+    "JUZI_EMAIL_DAILY_LIMIT": "50",
+    "SUPABASE_STORAGE_BUCKET": "juzi-market-private",
+    "SUPABASE_URL": "https://igulpkuyggfxlqojnzyi.supabase.co"
+  },
+  "observability": {
+    "enabled": false
+  },
+  "account_id": "5b0ae0b84289b5093c8ebbd70d3dae88"
+}

@@ -194,16 +194,60 @@ async function dto(db, row, viewer) {
   const isDemo = Boolean(row.is_demo);
   const imageIds = isDemo ? [] : await mediaIds(db, row.id);
   const schoolAccount = isDemo ? null : await first(db, 'SELECT verified_at FROM school_email_accounts WHERE user_id = ?', [row.owner_id]);
+  return productDto(row, viewer, imageIds, schoolAccount?.verified_at);
+}
+function productDto(row, viewer, imageIds = [], verifiedAt) {
+  const isDemo = Boolean(row.is_demo);
   return {
     id: row.id, title: row.title, category: row.category, price: row.price_cents / 100, originalPrice: row.original_price_cents / 100,
     condition: row.condition, campus: row.campus, location: row.location, description: row.description,
     specs: JSON.parse(row.specs_json), graduation: Boolean(row.graduation), seller: row.seller, avatar: '🍊',
     createdAt: row.created_at, status: productStatus(row), mine: !isDemo && row.owner_id === viewer?.userId, isDemo,
-    sellerEmailVerified: Boolean(schoolAccount?.verified_at),
+    sellerEmailVerified: !isDemo && Boolean(verifiedAt),
     images: isDemo ? demoImages(row.id) : imageIds.map(mediaId => `/api/media/${encodeURIComponent(mediaId)}`), imageIds,
   };
 }
-async function dtos(db, rows, viewer) { return Promise.all(rows.map(row => dto(db, row, viewer))); }
+async function dtos(db, rows, viewer, selection) {
+  const realRows = rows.filter(row => !row.is_demo);
+  const images = new Map(), verified = new Map();
+  const rememberImages = results => {
+    for (const { product_id, media_id } of results) {
+      if (!images.has(product_id)) images.set(product_id, []);
+      images.get(product_id).push(media_id);
+    }
+  };
+  const rememberAccounts = results => {
+    for (const { user_id, verified_at } of results) verified.set(user_id, verified_at);
+  };
+  if (realRows.length && selection) {
+    // Personal history and favorites have no item limit. Reuse their exact
+    // ownership/visibility selection, rather than adding queries per 100 items.
+    rememberImages(await all(db, `SELECT pm.product_id, pm.media_id FROM product_media pm
+      JOIN (${selection.sql}) selected ON selected.id = pm.product_id
+      WHERE selected.is_demo = 0 ORDER BY pm.product_id, pm.position`, selection.values));
+    rememberAccounts(await all(db, `SELECT DISTINCT a.user_id, a.verified_at FROM school_email_accounts a
+      JOIN (${selection.sql}) selected ON selected.owner_id = a.user_id
+      WHERE selected.is_demo = 0`, selection.values));
+  } else if (realRows.length) {
+    // D1 permits 100 bound parameters; public pages contain at most 100 items.
+    const productIds = [...new Set(realRows.map(row => row.id))];
+    const ownerIds = [...new Set(realRows.map(row => row.owner_id))];
+    for (let offset = 0; offset < productIds.length; offset += 100) {
+      const chunk = productIds.slice(offset, offset + 100);
+      rememberImages(await all(db, `SELECT product_id, media_id FROM product_media
+        WHERE product_id IN (${chunk.map(() => '?').join(',')}) ORDER BY product_id, position`, chunk));
+    }
+    for (let offset = 0; offset < ownerIds.length; offset += 100) {
+      const chunk = ownerIds.slice(offset, offset + 100);
+      rememberAccounts(await all(db, `SELECT user_id, verified_at FROM school_email_accounts
+        WHERE user_id IN (${chunk.map(() => '?').join(',')})`, chunk));
+    }
+  }
+  return rows.map(row => productDto(row, viewer, images.get(row.id) || [], verified.get(row.owner_id)));
+}
+async function selectedDtos(db, sql, values, viewer) {
+  return dtos(db, await all(db, sql, values), viewer, { sql, values });
+}
 async function userDto(db, viewer) {
   if (!viewer) return null;
   const stored = await first(db, 'SELECT display_name, campus, publish_seller, publish_contact_type, publish_contact_value, language, phone, wechat, qq FROM users WHERE id = ?', [viewer.userId]);
@@ -453,11 +497,11 @@ export async function handleMarket(request, env, viewer = null, { development = 
     }
     if (path === '/api/me/products' && method === 'GET') {
       const userId = requireViewer(viewer);
-      return json({ items: await dtos(db, await all(db, 'SELECT * FROM products WHERE owner_id = ? ORDER BY created_at DESC, id DESC', [userId]), viewer) });
+      return json({ items: await selectedDtos(db, 'SELECT * FROM products WHERE owner_id = ? ORDER BY created_at DESC, id DESC', [userId], viewer) });
     }
     if (path === '/api/me/favorites' && method === 'GET') {
       const userId = requireViewer(viewer);
-      return json({ items: await dtos(db, await all(db, "SELECT p.* FROM products p JOIN favorites f ON f.product_id = p.id WHERE f.user_id = ? AND ((p.status = 'active' AND p.sold_at IS NULL AND p.deleted_at IS NULL) OR p.owner_id = ?) ORDER BY f.created_at DESC, p.id DESC", [userId, userId]), viewer) });
+      return json({ items: await selectedDtos(db, "SELECT p.* FROM products p JOIN favorites f ON f.product_id = p.id WHERE f.user_id = ? AND ((p.status = 'active' AND p.sold_at IS NULL AND p.deleted_at IS NULL) OR p.owner_id = ?) ORDER BY f.created_at DESC, p.id DESC", [userId, userId], viewer) });
     }
     let match = path.match(/^\/api\/me\/favorites\/([^/]+)$/);
     if (match && ['PUT', 'DELETE'].includes(method)) {

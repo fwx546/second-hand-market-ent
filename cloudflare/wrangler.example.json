@@ -1,0 +1,21 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "juzi-campus-market",
+  "main": "./worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./.output/public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api", "/api/*"]
+  },
+  "d1_databases": [],
+  "vars": {
+    "JUZI_SITE_ENABLED": "false",
+    "JUZI_EMAIL_ENABLED": "true",
+    "JUZI_EMAIL_PROVIDER": "gmail_apps_script",
+    "JUZI_EMAIL_DAILY_LIMIT": "50",
+    "SUPABASE_STORAGE_BUCKET": "juzi-market-private"
+  },
+  "observability": { "enabled": false }
+}

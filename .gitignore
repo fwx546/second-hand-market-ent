@@ -28,3 +28,5 @@
 next-env.d.ts
 .vercel/
 /coverage/
+/cloudflare/.output/
+/cloudflare/.dev.vars*
