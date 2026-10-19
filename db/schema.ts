@@ -6,6 +6,9 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   displayName: text("display_name").notNull().default("橘子同学"),
   campus: text("campus").notNull().default(""),
+  publishSeller: text("publish_seller").notNull().default(""),
+  publishContactType: text("publish_contact_type").notNull().default(""),
+  publishContactValue: text("publish_contact_value").notNull().default(""),
   createdAt: integer("created_at").notNull(),
 });
 

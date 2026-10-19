@@ -10,7 +10,7 @@ test('profile is private, validated, persisted and isolated from listing nicknam
   assert.equal((await api(env, '/api/me', { method: 'PATCH', viewer: A, origin: null, body: { displayName: '小橘' } })).status, 403);
   const saved = await api(env, '/api/me', { method: 'PATCH', viewer: A, body: { displayName: '  图书馆小橘  ', campus: '太仓校区' } });
   assert.equal(saved.status, 200);
-  assert.deepEqual(saved.data.user, { id: A.userId, displayName: '图书馆小橘', campus: '太仓校区', emailMasked: A.emailMasked, schoolVerified: false, emailVerified: true });
+  assert.deepEqual(saved.data.user, { id: A.userId, displayName: '图书馆小橘', campus: '太仓校区', publishSeller: '', publishContactType: '', publishContactValue: '', emailMasked: A.emailMasked, schoolVerified: false, emailVerified: true });
   assert.equal(saved.response.headers.get('cache-control'), 'no-store');
   assert.deepEqual((await api(env, '/api/me', { viewer: A })).data.user, saved.data.user);
   assert.equal((await api(env, '/api/me', { viewer: B })).data.user.displayName, '橘子同学');
@@ -26,6 +26,37 @@ test('profile is private, validated, persisted and isolated from listing nicknam
   const publicText = JSON.stringify((await api(env, '/api/products')).data);
   assert(!publicText.includes('账户新昵称'));
   assert(!publicText.includes(A.emailMasked));
+});
+
+test('successful publishing saves private defaults for the owner and future listings', async t => {
+  const env = fixture(t);
+  const first = await publish(env, A, { seller: '第一位卖家', contactType: 'qq', contactValue: '123456789' });
+  assert.equal(first.status, 201);
+  const owner = (await api(env, '/api/me', { viewer: A })).data.user;
+  assert.equal(owner.publishSeller, '第一位卖家');
+  assert.equal(owner.publishContactType, 'qq');
+  assert.equal(owner.publishContactValue, '123456789');
+  assert.equal((await api(env, '/api/me', { viewer: B })).data.user.publishContactValue, '');
+  assert.equal((await api(env, '/api/me')).data.user, null);
+  assert(!JSON.stringify((await api(env, '/api/products')).data).includes('123456789'));
+
+  await api(env, `/api/products/${first.data.product.id}`, { method: 'PATCH', viewer: A, body: { seller: '只修改旧商品', contactValue: 'old_only' } });
+  assert.equal((await api(env, '/api/me', { viewer: A })).data.user.publishContactValue, '123456789');
+  const second = await publish(env, A, { seller: '最新卖家', contactType: 'wechat', contactValue: 'new_wechat' });
+  assert.equal(second.status, 201);
+  assert.equal((await api(env, '/api/me', { viewer: A })).data.user.publishContactValue, 'new_wechat');
+  assert.equal((await api(env, `/api/products/${first.data.product.id}/contact`, { viewer: A })).data.value, 'old_only');
+});
+
+test('existing listings supply defaults until the next successful publication', async t => {
+  const env = fixture(t);
+  const first = await publish(env, A, { seller: '旧卖家', contactType: 'phone', contactValue: '13800138000' });
+  env.DB.sqlite.prepare("UPDATE users SET publish_seller = '', publish_contact_type = '', publish_contact_value = '' WHERE id = ?").run(A.userId);
+  const defaults = (await api(env, '/api/me', { viewer: A })).data.user;
+  assert.equal(defaults.publishSeller, '旧卖家');
+  assert.equal(defaults.publishContactType, 'phone');
+  assert.equal(defaults.publishContactValue, '13800138000');
+  assert.equal(first.status, 201);
 });
 
 test('profile rejects mass assignment, invalid campus, mailbox nicknames and empty changes', async t => {

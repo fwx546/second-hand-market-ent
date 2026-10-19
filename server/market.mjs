@@ -110,8 +110,12 @@ function validateProduct(input) {
   if (!input.specs || typeof input.specs !== 'object' || Array.isArray(input.specs)) fail(400, 'INVALID_INPUT', '请填写商品参数。');
   const entries = Object.entries(input.specs);
   if (!entries.length || entries.length > 10) fail(400, 'INVALID_INPUT', '商品参数应为 1–10 项。');
-  value.specs = Object.fromEntries(entries.map(([key, item]) => [text(key, '参数名', 1, 40), text(item, '参数内容', 1, 200)]));
-  const required = value.category === 'ebike' ? ['购入时间', '电池情况', '卖家自述续航'] : value.category === 'daily' ? ['尺寸', '数量', '使用情况'] : ['型号', '使用情况'];
+  value.specs = Object.fromEntries(entries.flatMap(([key, item]) => {
+    const name = text(key, '参数名', 1, 40);
+    if (value.category === 'daily' && name === '尺寸' && item === '') return [];
+    return [[name, text(item, '参数内容', 1, 200)]];
+  }));
+  const required = value.category === 'ebike' ? ['购入时间', '电池情况', '卖家自述续航'] : value.category === 'daily' ? ['数量', '使用情况'] : ['型号', '使用情况'];
   if (required.some(key => !Object.hasOwn(value.specs, key))) fail(400, 'INVALID_INPUT', '请填写该分类的完整商品参数。');
   if (!Array.isArray(input.imageIds) || input.imageIds.length < 1 || input.imageIds.length > 6 || new Set(input.imageIds).size !== input.imageIds.length) {
     fail(400, 'INVALID_INPUT', '请选择 1–6 张不同的商品照片。');
@@ -149,8 +153,9 @@ async function dto(db, row, viewer) {
 async function dtos(db, rows, viewer) { return Promise.all(rows.map(row => dto(db, row, viewer))); }
 async function userDto(db, viewer) {
   if (!viewer) return null;
-  const stored = await first(db, 'SELECT display_name, campus FROM users WHERE id = ?', [viewer.userId]);
-  return { id: viewer.userId, displayName: stored?.display_name || '橘子同学', campus: stored?.campus || '', schoolVerified: false, emailVerified: true, emailMasked: viewer.emailMasked || null };
+  const stored = await first(db, 'SELECT display_name, campus, publish_seller, publish_contact_type, publish_contact_value FROM users WHERE id = ?', [viewer.userId]);
+  const previous = stored?.publish_contact_value ? null : await first(db, 'SELECT p.seller, c.type, c.value FROM products p JOIN private_contacts c ON c.product_id = p.id WHERE p.owner_id = ? AND p.is_demo = 0 ORDER BY p.created_at DESC, p.id DESC LIMIT 1', [viewer.userId]);
+  return { id: viewer.userId, displayName: stored?.display_name || '橘子同学', campus: stored?.campus || '', publishSeller: stored?.publish_seller || previous?.seller || '', publishContactType: stored?.publish_contact_type || previous?.type || '', publishContactValue: stored?.publish_contact_value || previous?.value || '', schoolVerified: false, emailVerified: true, emailMasked: viewer.emailMasked || null };
 }
 async function updateProfile(request, db, viewer) {
   const userId = requireViewer(viewer), body = await payload(request);
@@ -244,6 +249,7 @@ async function createProduct(request, db, viewer) {
   const results = await db.batch([
     statement(db, "INSERT INTO products (id, owner_id, title, category, price_cents, original_price_cents, condition, campus, location, description, specs_json, graduation, seller, status, created_at, updated_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT count(*) FROM products WHERE owner_id = ? AND created_at >= ?) < 20 AND (SELECT count(*) FROM products WHERE owner_id = ? AND status = 'active' AND sold_at IS NULL AND deleted_at IS NULL) < 100",
       [productId, userId, value.title, value.category, value.priceCents, value.originalPriceCents, value.condition, value.campus, value.location, value.description, JSON.stringify(value.specs), Number(value.graduation), value.seller, 'active', now, now, userId, now - DAY, userId]),
+    statement(db, 'UPDATE users SET publish_seller = ?, publish_contact_type = ?, publish_contact_value = ? WHERE id = ? AND EXISTS (SELECT 1 FROM products WHERE id = ? AND owner_id = ?)', [value.seller, value.contactType, value.contactValue, userId, productId, userId]),
     contactStatement(db, productId, value), ...imageStatements(db, productId, value.imageIds),
   ]);
   if (!results[0].meta?.changes) { await assertCreateQuota(db, userId); fail(429, 'PUBLISH_LIMIT', '发布过于频繁，请稍后再试。'); }
