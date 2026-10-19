@@ -2,7 +2,7 @@ import { demoImages } from './demo-catalog.mjs';
 
 const CATEGORIES = ['appliance', 'ebike', 'daily'];
 const CAMPUSES = ['SIP 校区', '太仓校区'];
-const CONDITIONS = ['几乎全新', '九成新', '八成新'];
+const CONDITIONS = ['全新', '几乎全新', '轻微使用痕迹', '明显使用痕迹'];
 const CONTACT_TYPES = ['wechat', 'phone', 'qq'];
 const FIELDS = ['title', 'category', 'price', 'originalPrice', 'condition', 'campus', 'location', 'description', 'specs', 'graduation', 'seller', 'contactType', 'contactValue', 'imageIds'];
 const MAX_IMAGE = 8 * 1024 * 1024;
@@ -123,6 +123,59 @@ function validateProduct(input) {
   value.imageIds = input.imageIds.map(id);
   return value;
 }
+
+async function listConversations(db, userId) {
+  const rows = await all(db, `SELECT c.id, c.product_id, c.buyer_id, c.seller_id, c.updated_at, p.title, p.seller, p.status,
+    u.display_name AS other_name,
+    (SELECT m.body FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message,
+    (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_at
+    FROM conversations c JOIN products p ON p.id = c.product_id
+    JOIN users u ON u.id = CASE WHEN c.buyer_id = ? THEN c.seller_id ELSE c.buyer_id END
+    WHERE c.buyer_id = ? OR c.seller_id = ? ORDER BY c.updated_at DESC, c.id DESC`, [userId, userId, userId]);
+  return rows.map(row => ({ id: row.id, productId: row.product_id, title: row.title, seller: row.seller, productStatus: row.status,
+    otherName: row.other_name || '橘子同学', lastMessage: row.last_message || '开始聊聊这件好物', updatedAt: row.last_message_at || row.updated_at,
+    role: row.buyer_id === userId ? 'buyer' : 'seller' }));
+}
+
+async function conversationRow(db, conversationId, userId) {
+  return first(db, 'SELECT * FROM conversations WHERE id = ? AND (buyer_id = ? OR seller_id = ?)', [conversationId, userId, userId]);
+}
+
+async function startConversation(request, db, viewer) {
+  const userId = requireViewer(viewer), body = await payload(request);
+  if (Object.keys(body).length !== 1 || !Object.hasOwn(body, 'productId')) fail(400, 'INVALID_INPUT', '请提供商品编号。');
+  const productId = id(body.productId), product = await productRow(db, productId);
+  if (!visible(product, viewer) || product.is_demo) fail(404, 'NOT_FOUND', '商品不存在或暂不可联系。');
+  if (product.owner_id === userId) fail(400, 'SELF_MESSAGE', '不能给自己发布的商品发消息。');
+  await ensureUser(db, userId);
+  const now = Date.now(), conversationId = `conv_${crypto.randomUUID()}`;
+  await statement(db, `INSERT INTO conversations (id, product_id, buyer_id, seller_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(product_id, buyer_id) DO NOTHING`,
+    [conversationId, productId, userId, product.owner_id, now, now]).run();
+  const existing = await first(db, 'SELECT id FROM conversations WHERE product_id = ? AND buyer_id = ?', [productId, userId]);
+  return json({ conversationId: existing.id });
+}
+
+async function readConversationMessages(db, conversationId, userId) {
+  if (!await conversationRow(db, conversationId, userId)) fail(404, 'NOT_FOUND', '对话不存在。');
+  const rows = await all(db, `SELECT id, sender_id, body, created_at FROM
+    (SELECT id, sender_id, body, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT 100)
+    ORDER BY created_at ASC, id ASC`, [conversationId]);
+  return json({ items: rows.map(row => ({ id: row.id, senderId: row.sender_id, body: row.body, createdAt: row.created_at, mine: row.sender_id === userId })) });
+}
+
+async function sendConversationMessage(request, db, conversationId, userId) {
+  const body = await payload(request);
+  if (Object.keys(body).length !== 1 || !Object.hasOwn(body, 'body')) fail(400, 'INVALID_INPUT', '请只填写消息内容。');
+  const conversation = await conversationRow(db, conversationId, userId);
+  if (!conversation) fail(404, 'NOT_FOUND', '对话不存在。');
+  const value = text(body.body, '消息', 1, 1000, true), now = Date.now(), messageId = `msg_${crypto.randomUUID()}`;
+  await db.batch([
+    statement(db, 'INSERT INTO messages (id, conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)', [messageId, conversationId, userId, value, now]),
+    statement(db, 'UPDATE conversations SET updated_at = ? WHERE id = ?', [now, conversationId]),
+  ]);
+  return json({ message: { id: messageId, senderId: userId, body: value, createdAt: now, mine: true } }, 201);
+}
 async function ensureUser(db, userId) {
   await statement(db, 'INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING', [userId, '橘子同学', Date.now()]).run();
 }
@@ -153,19 +206,27 @@ async function dto(db, row, viewer) {
 async function dtos(db, rows, viewer) { return Promise.all(rows.map(row => dto(db, row, viewer))); }
 async function userDto(db, viewer) {
   if (!viewer) return null;
-  const stored = await first(db, 'SELECT display_name, campus, publish_seller, publish_contact_type, publish_contact_value FROM users WHERE id = ?', [viewer.userId]);
+  const stored = await first(db, 'SELECT display_name, campus, publish_seller, publish_contact_type, publish_contact_value, language, phone, wechat, qq FROM users WHERE id = ?', [viewer.userId]);
   const previous = stored?.publish_contact_value ? null : await first(db, 'SELECT p.seller, c.type, c.value FROM products p JOIN private_contacts c ON c.product_id = p.id WHERE p.owner_id = ? AND p.is_demo = 0 ORDER BY p.created_at DESC, p.id DESC LIMIT 1', [viewer.userId]);
-  return { id: viewer.userId, displayName: stored?.display_name || '橘子同学', campus: stored?.campus || '', publishSeller: stored?.publish_seller || previous?.seller || '', publishContactType: stored?.publish_contact_type || previous?.type || '', publishContactValue: stored?.publish_contact_value || previous?.value || '', schoolVerified: false, emailVerified: true, emailMasked: viewer.emailMasked || null };
+  return { id: viewer.userId, displayName: stored?.display_name || '橘子同学', campus: stored?.campus || '', publishSeller: stored?.publish_seller || previous?.seller || '', publishContactType: stored?.publish_contact_type || previous?.type || '', publishContactValue: stored?.publish_contact_value || previous?.value || '', language: stored?.language === 'en' ? 'en' : 'zh', phone: stored?.phone || '', wechat: stored?.wechat || '', qq: stored?.qq || '', schoolVerified: false, emailVerified: viewer.provider === 'school_email', ...(viewer.provider === 'local_preview' ? { preview: true } : {}), emailMasked: viewer.emailMasked || null };
 }
 async function updateProfile(request, db, viewer) {
   const userId = requireViewer(viewer), body = await payload(request);
-  if (!Object.keys(body).length || Object.keys(body).some(key => !['displayName', 'campus'].includes(key))) fail(400, 'INVALID_INPUT', '请只修改昵称与常用校区。');
+  if (!Object.keys(body).length || Object.keys(body).some(key => !['displayName', 'campus', 'language', 'phone', 'wechat', 'qq'].includes(key))) fail(400, 'INVALID_INPUT', '个人资料包含不支持的字段。');
   const changes = {};
   if (Object.hasOwn(body, 'displayName')) {
     changes.display_name = text(body.displayName, '昵称', 1, 20);
     if (changes.display_name.includes('@')) fail(400, 'INVALID_INPUT', '昵称中请不要填写邮箱地址。');
   }
   if (Object.hasOwn(body, 'campus')) changes.campus = choice(body.campus, ['', ...CAMPUSES], '常用校区');
+  if (Object.hasOwn(body, 'language')) changes.language = choice(body.language, ['zh', 'en'], '语言');
+  for (const [key, label, pattern] of [['phone', '手机号', /^(?:1[3-9]\d{9})?$/], ['wechat', '微信号', /^(?:[A-Za-z][A-Za-z0-9_-]{5,19})?$/], ['qq', 'QQ 号', /^(?:[1-9]\d{4,11})?$/]]) {
+    if (!Object.hasOwn(body, key)) continue;
+    if (typeof body[key] !== 'string') fail(400, 'INVALID_INPUT', `${label}格式不正确。`);
+    const value = body[key].trim();
+    if (!pattern.test(value)) fail(400, 'INVALID_INPUT', `${label}格式不正确。`);
+    changes[key] = value;
+  }
   await ensureUser(db, userId);
   await statement(db, `UPDATE users SET ${Object.keys(changes).map(key => `${key} = ?`).join(', ')} WHERE id = ?`, [...Object.values(changes), userId]).run();
   return json({ user: await userDto(db, viewer) });
@@ -191,7 +252,7 @@ async function listProducts(db, search, viewer) {
     where.push("instr(lower(title || ' ' || description || ' ' || CASE category WHEN 'appliance' THEN '小电器' WHEN 'ebike' THEN '电瓶车' ELSE '生活用品' END), lower(?)) > 0");
     values.push(query);
   }
-  for (const [key, clause] of [['cheap', 'price_cents <= 10000'], ['fresh', "condition = '几乎全新'"], ['graduation', 'graduation = 1']]) {
+  for (const [key, clause] of [['cheap', 'price_cents <= 10000'], ['fresh', "condition IN ('全新', '几乎全新')"], ['graduation', 'graduation = 1']]) {
     const value = search.get(key);
     if (value !== null && !['0', '1'].includes(value)) fail(400, 'INVALID_INPUT', '筛选参数无效。');
     if (value === '1') where.push(clause);
@@ -249,8 +310,8 @@ async function createProduct(request, db, viewer) {
   const results = await db.batch([
     statement(db, "INSERT INTO products (id, owner_id, title, category, price_cents, original_price_cents, condition, campus, location, description, specs_json, graduation, seller, status, created_at, updated_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT count(*) FROM products WHERE owner_id = ? AND created_at >= ?) < 20 AND (SELECT count(*) FROM products WHERE owner_id = ? AND status = 'active' AND sold_at IS NULL AND deleted_at IS NULL) < 100",
       [productId, userId, value.title, value.category, value.priceCents, value.originalPriceCents, value.condition, value.campus, value.location, value.description, JSON.stringify(value.specs), Number(value.graduation), value.seller, 'active', now, now, userId, now - DAY, userId]),
-    statement(db, 'UPDATE users SET publish_seller = ?, publish_contact_type = ?, publish_contact_value = ? WHERE id = ? AND EXISTS (SELECT 1 FROM products WHERE id = ? AND owner_id = ?)', [value.seller, value.contactType, value.contactValue, userId, productId, userId]),
     contactStatement(db, productId, value), ...imageStatements(db, productId, value.imageIds),
+    statement(db, 'UPDATE users SET publish_seller = ?, publish_contact_type = ?, publish_contact_value = ? WHERE id = ? AND EXISTS (SELECT 1 FROM products WHERE id = ? AND owner_id = ?)', [value.seller, value.contactType, value.contactValue, userId, productId, userId]),
   ]);
   if (!results[0].meta?.changes) { await assertCreateQuota(db, userId); fail(429, 'PUBLISH_LIMIT', '发布过于频繁，请稍后再试。'); }
   return json({ product: await dto(db, await productRow(db, productId), viewer) }, 201);
@@ -358,7 +419,7 @@ async function getMedia(env, db, mediaId, viewer) {
 export async function handleMarket(request, env, viewer = null, { development = false, authentication } = {}) {
   try {
     // Platform/OIDC identities and guest selections are not school-email authentication.
-    if (viewer?.provider !== 'school_email' || viewer?.emailVerified !== true) viewer = null;
+    if (!(viewer?.provider === 'school_email' && viewer.emailVerified === true) && !(development === true && viewer?.provider === 'local_preview' && viewer.preview === true && new URL(request.url).hostname === 'localhost')) viewer = null;
     const method = request.method.toUpperCase(), url = new URL(request.url);
     if (!['GET', 'POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) fail(405, 'METHOD_NOT_ALLOWED', '此请求方式不受支持。');
     if (method !== 'GET') { requireViewer(viewer); requireOrigin(request); }
@@ -378,6 +439,14 @@ export async function handleMarket(request, env, viewer = null, { development = 
       });
     }
     if (path === '/api/me' && method === 'PATCH') return await updateProfile(request, db, viewer);
+    if (path === '/api/me/conversations' && method === 'GET') return json({ items: await listConversations(db, requireViewer(viewer)) });
+    if (path === '/api/conversations' && method === 'POST') return await startConversation(request, db, viewer);
+    let conversationMatch = path.match(/^\/api\/conversations\/([^/]+)\/messages$/);
+    if (conversationMatch) {
+      const conversationId = id(decodeURIComponent(conversationMatch[1])), userId = requireViewer(viewer);
+      if (method === 'GET') return await readConversationMessages(db, conversationId, userId);
+      if (method === 'POST') return await sendConversationMessage(request, db, conversationId, userId);
+    }
     if (path === '/api/products') {
       if (method === 'GET') return await listProducts(db, url.searchParams, viewer);
       if (method === 'POST') return await createProduct(request, db, viewer);

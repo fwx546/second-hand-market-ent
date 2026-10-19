@@ -10,7 +10,7 @@ test('profile is private, validated, persisted and isolated from listing nicknam
   assert.equal((await api(env, '/api/me', { method: 'PATCH', viewer: A, origin: null, body: { displayName: '小橘' } })).status, 403);
   const saved = await api(env, '/api/me', { method: 'PATCH', viewer: A, body: { displayName: '  图书馆小橘  ', campus: '太仓校区' } });
   assert.equal(saved.status, 200);
-  assert.deepEqual(saved.data.user, { id: A.userId, displayName: '图书馆小橘', campus: '太仓校区', publishSeller: '', publishContactType: '', publishContactValue: '', emailMasked: A.emailMasked, schoolVerified: false, emailVerified: true });
+  assert.deepEqual(saved.data.user, { id: A.userId, displayName: '图书馆小橘', campus: '太仓校区', publishSeller: '', publishContactType: '', publishContactValue: '', language: 'zh', phone: '', wechat: '', qq: '', emailMasked: A.emailMasked, schoolVerified: false, emailVerified: true });
   assert.equal(saved.response.headers.get('cache-control'), 'no-store');
   assert.deepEqual((await api(env, '/api/me', { viewer: A })).data.user, saved.data.user);
   assert.equal((await api(env, '/api/me', { viewer: B })).data.user.displayName, '橘子同学');
@@ -67,6 +67,40 @@ test('profile rejects mass assignment, invalid campus, mailbox nicknames and emp
   assert.equal((await api(env, '/api/me', { method: 'PATCH', viewer: A, body: { displayName: '小橘' } })).status, 200);
   assert.equal((await api(env, '/api/me', { method: 'PATCH', viewer: A, body: { campus: 'SIP 校区' } })).status, 200);
   assert.equal((await api(env, '/api/me', { viewer: A })).data.user.displayName, '小橘');
+});
+
+test('account settings persist privately and reject invalid contact details', async t => {
+  const env = fixture(t);
+  const body = { language: 'en', phone: '13800138000', wechat: 'Orange_123', qq: '12345678' };
+  const saved = await api(env, '/api/me', { method: 'PATCH', viewer: A, body });
+  assert.equal(saved.status, 200);
+  for (const [key, value] of Object.entries(body)) assert.equal(saved.data.user[key], value);
+  assert.equal((await api(env, '/api/me', { viewer: A })).data.user.language, 'en');
+  assert.equal((await api(env, '/api/me', { viewer: B })).data.user.phone, '');
+  assert(!JSON.stringify((await api(env, '/api/products')).data).includes(body.phone));
+  for (const invalid of [{ language: 'fr' }, { phone: '123' }, { phone: null }, { wechat: 'bad' }, { qq: '00000' }]) {
+    assert.equal((await api(env, '/api/me', { method: 'PATCH', viewer: A, body: invalid })).status, 400);
+  }
+  const cleared = await api(env, '/api/me', { method: 'PATCH', viewer: A, body: { phone: '', wechat: '', qq: '' } });
+  assert.equal(cleared.data.user.phone, '');
+});
+
+test('buyers and sellers can exchange private messages only inside their product conversation', async t => {
+  const env = fixture(t), listing = await publish(env, A), productId = listing.data.product.id;
+  const started = await api(env, '/api/conversations', { method: 'POST', viewer: B, body: { productId } });
+  assert.equal(started.status, 200);
+  const conversationId = started.data.conversationId;
+  assert.equal((await api(env, '/api/conversations', { method: 'POST', viewer: B, body: { productId } })).data.conversationId, conversationId);
+  assert.equal((await api(env, '/api/me/conversations', { viewer: A })).data.items[0].role, 'seller');
+  assert.equal((await api(env, '/api/me/conversations', { viewer: B })).data.items[0].role, 'buyer');
+  assert.equal((await api(env, `/api/conversations/${conversationId}/messages`, { method: 'POST', viewer: B, body: { body: '你好，还在出售吗？' } })).status, 201);
+  const received = await api(env, `/api/conversations/${conversationId}/messages`, { viewer: A });
+  assert.equal(received.data.items[0].body, '你好，还在出售吗？');
+  assert.equal(received.data.items[0].mine, false);
+  assert.equal((await api(env, `/api/conversations/${conversationId}/messages`, { viewer: B })).data.items[0].mine, true);
+  assert.equal((await api(env, `/api/conversations/${conversationId}/messages`, { viewer: { ...B, userId: 'intruder' } })).status, 404);
+  assert.equal((await api(env, '/api/conversations', { method: 'POST', viewer: A, body: { productId } })).status, 400);
+  assert.equal((await api(env, `/api/conversations/${conversationId}/messages`, { method: 'POST', viewer: B, body: { body: '' } })).status, 400);
 });
 
 test('sold listings leave public feed, contacts, favorites and media while owner retains history', async t => {
@@ -222,7 +256,7 @@ test('additive migration preserves legacy accounts, listings, contacts, favorite
     for (const file of migrations.slice(3)) db.exec(readFileSync(new URL(file, folder), 'utf8'));
     const user = db.prepare('SELECT * FROM users').get(), product = db.prepare('SELECT * FROM products').get();
     assert.equal(user.display_name, '旧昵称'); assert.equal(user.campus, '');
-    assert.equal(product.title, '旧商品'); assert.equal(product.status, 'active'); assert.equal(product.sold_at, null); assert.equal(product.deleted_at, null);
+    assert.equal(product.title, '旧商品'); assert.equal(product.condition, '轻微使用痕迹'); assert.equal(product.status, 'active'); assert.equal(product.sold_at, null); assert.equal(product.deleted_at, null);
     for (const table of ['private_contacts', 'favorites', 'media', 'product_media']) assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 1);
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { db.close(); }

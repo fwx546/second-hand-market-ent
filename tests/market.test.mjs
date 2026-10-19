@@ -17,7 +17,7 @@ test('empty schema fixture; identity never publishes account email or full name'
   assert.equal(anonymous.data.development, false);
   assert.equal(anonymous.data.capabilities.canPublish, false);
   const loggedIn = await api(env, '/api/me', { viewer: { ...A, email: 'private@school.edu', displayName: 'PRIVATE_FULL_NAME' } });
-  assert.deepEqual(loggedIn.data.user, { id: A.userId, displayName: '橘子同学', campus: '', publishSeller: '', publishContactType: '', publishContactValue: '', schoolVerified: false, emailVerified: true, emailMasked: A.emailMasked });
+  assert.deepEqual(loggedIn.data.user, { id: A.userId, displayName: '橘子同学', campus: '', publishSeller: '', publishContactType: '', publishContactValue: '', language: 'zh', phone: '', wechat: '', qq: '', schoolVerified: false, emailVerified: true, emailMasked: A.emailMasked });
   assert.equal(loggedIn.data.capabilities.canPublish, true);
   assert.equal(loggedIn.data.signInUrl, '/#/login');
   assert.equal(loggedIn.data.authentication.provider, 'school_email');
