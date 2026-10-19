@@ -130,3 +130,16 @@
 
 本地日志：`artifacts/demo-full-test.log`、`artifacts/demo-build.log`、`artifacts/demo-migration.log`；截图：`artifacts/demo-home-desktop.png`、`artifacts/demo-detail-mobile.png`。这些验收产物不纳入公开源码。
 
+## 独立免费托管迁移准备（2026-10-20）
+
+- 已核实 Cloudflare Workers/D1 为 Free、Supabase 组织为 Free；未添加付款方式、开通 R2 或购买付费服务。
+- 真实新站程序已部署至 `https://juzi-campus-market.wenxin-fu23.workers.dev`，版本 `38a9bde6-4424-49c1-bbb1-ec510aa90898`；用户确认自己的设备能打开网页。本机浏览器仍连接超时，因此用户访问确认与本机验收分开记录。
+- 新站保持 `JUZI_SITE_ENABLED=false`。目标业务表为空，原始图片、最终数据库和邮件登录尚未完成迁入/联测；不能将程序部署成功表述为迁移完成。
+- 原生只读查看器已完整读取源站 10 张表，并保存本机私有数据库备份：6 个用户记录（含示例账号）、5 个学校邮箱绑定、29 件商品（11 件真实商品、18 件示例）、11 个媒体记录。已保存 SHA-256；该备份不含图片字节，不作为完整迁移包。
+- 维护工具和已连接 Edge 的旧站请求仍被 Cloudflare 拦截；用户确认自己的手机和电脑可正常查看旧站照片。没有修改网络安全设置或旧站公开权限。
+- 旧站临时只读状态已解除。官方发布版本 12 加入默认关闭、短期启用的管理员下载页；实际源数据库/图片下载仍待用户在可正常访问的电脑浏览器完成。页面不嵌入凭据，令牌不进入 URL/storage；下载前后核对业务数据和完整桶清单，发生变化则拒绝生成文件。
+- 完整旧站测试 **176/176** 通过，官方构建、推送与版本 12 发布成功；独立运行时完整测试 **217/217** 通过，`scripts/check.mjs` 与差异检查通过。新增受控互通测试运行真实浏览器脚本、SQLite/R2 导出处理器、Blob 下载、本机适配器和 `loadExport`；它不能代替真实用户备份下载或生产迁移验收。
+- 新增本机转换器验证严格本地 JSON、SHA-256、可用 MD5 ETag、大小及图片签名，防止覆盖私有运行目录；超过读取限额及时停止。不会在转换阶段写入云数据库或图片桶。
+
+日志：`artifacts/browser-export-source-tests.log`、`artifacts/browser-export-full-tests.log`。真实账号数据、联系资料、备份、凭据和构建产物均不提交公开仓库。
+

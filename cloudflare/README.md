@@ -10,7 +10,11 @@ Cloudflare 和 Supabase 账号与 ChatGPT 账号独立。本次按用户最新�
 - Supabase：通过 GitHub `WenxinFu050406` 登录，使用已有 Free 组织
   `rvmdnmqmvirighbnqmcv`，新项目为 `igulpkuyggfxlqojnzyi`。
 
-当前独立网站**尚未部署**，旧 Sites 网站继续保留。后续由上述账号管理
+独立网站程序已于 **2026-10-20** 部署到
+<https://juzi-campus-market.wenxin-fu23.workers.dev>，但仍处于迁移维护状态：
+`JUZI_SITE_ENABLED=false`，目标数据库尚未导入业务记录，原始图片尚未迁入。
+本机访问新域名超时，公网浏览器与邮件验收尚未完成，不能将其作为已完成迁移的网站交付。
+旧 Sites 网站继续保留，临时只读状态已解除。后续由上述账号管理
 对应的云端资源，本次无需注册 QQ 邮箱账号、迁移 GitHub 仓库所有权或购买
 ChatGPT Business。平台若要求填写付款方式或升级套餐，应停止该步骤并
 检查是否选择了 Free。
@@ -82,7 +86,7 @@ SQLite 中执行后提取，仅包含最终表/索引，无示例数据、用户
 
 ## 私有数据迁移与验收
 
-以下是待执行的迁移流程，不代表网站已经部署或数据已经迁入。先准备旧站
+以下是待执行的迁移流程，不代表数据已经迁入。先准备旧站
 临时、到期失效的只读导出能力，并保持新站 `JUZI_SITE_ENABLED=false`。
 私有配置文件保存导出令牌及目标 Supabase Storage 配置，其中的密钥不能
 提交、打印或写入命令参数。每次完整导出使用新的运行目录：
@@ -93,6 +97,25 @@ $migrationEnv = Read-Host '私有迁移配置文件路径'
 node scripts/migrate-cloudflare.mjs export --run $migrationRun --env-file $migrationEnv
 node scripts/migrate-cloudflare.mjs prepare --run $migrationRun
 ```
+
+如果维护工具访问旧站被拦截，而维护者自己的正常浏览器仍可访问，可临时启用
+旧站的 `/api/migration-export/operator` 下载页。该页默认关闭，到期后失效；
+迁移令牌仅输入旧站的密码框，不能写入网址、聊天或仓库。页面会完整枚举源桶，
+顺序下载原图，并在前后复核业务记录与桶清单；发生变化时不生成备份。
+该备份包含账号资料和联系方式，只保存到本人电脑。
+
+将正常浏览器下载的 JSON 转为同一私有迁移格式，再继续下方验证流程：
+
+```powershell
+$browserBackup = Read-Host '下载的 juzi-private-backup JSON 完整路径'
+node scripts/import-browser-export.mjs --input $browserBackup --run $migrationRun
+node scripts/migrate-cloudflare.mjs prepare --run $migrationRun
+```
+
+浏览器路径限 128 个对象、单张 8 MiB、图片共 32 MiB、下载文件 64 MiB。
+本机转换会重新校验 SHA-256、可用的原始 MD5 ETag、字节数与图片类型，随后
+由同一 `loadExport` 验证器检查全部图片关联。它不写入数据库或 Supabase。
+浏览器备份也不能证明下载后源站没有变化；正式导入前仍需冻结写入并复核。
 
 `export` 在忽略的私有目录保存完整源数据库快照、源桶全部分页对象（包括
 未关联商品的对象）、原始对象元数据及 SHA-256。`prepare` 核验备份，生成
