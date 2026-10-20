@@ -39,6 +39,19 @@ function fixture() {
   const object = { key:'market/fixture',size:BYTES.length,etag:createHash('md5').update(BYTES).digest('hex'),httpEtag:'"fixture"',uploaded:'2031-01-01T00:00:00.000Z',contentType:'image/png',httpMetadata:{contentType:'image/png',cacheControl:'private'},customMetadata:{说明:'完整私有备份'},storageClass:'Standard' };
   return { snapshot, objects:[{...object,sha256:sha256(BYTES)}], object };
 }
+function addPlatformMigrationMetadata(data) {
+  const db = new DatabaseSync(':memory:');
+  try {
+    // Trusted test DDL for the one actual platform table, never a source SQL execution path.
+    db.exec('CREATE TABLE "__appgarden_migrations"(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)');
+    for (let index = 0; index < 5; index++) db.prepare('INSERT INTO __appgarden_migrations(name,applied_at) VALUES(?,?)').run(`fixture-platform-${index}`,'2031-01-01 00:00:00');
+    const name = '__appgarden_migrations', rows = db.prepare('SELECT * FROM __appgarden_migrations').all();
+    data.snapshot.schema.push(...db.prepare('SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE tbl_name=?').all(name));
+    data.snapshot.tables.push({name,columns:db.prepare('PRAGMA table_info("__appgarden_migrations")').all(),rows,count:rows.length});
+    data.snapshot.counts[name]=rows.length;
+  } finally { db.close(); }
+  return data;
+}
 async function temporary(t) {
   const folder = await mkdtemp(join(tmpdir(),'juzi-private-migration-'));
   t.after(async()=> { assert(resolve(folder).startsWith(resolve(tmpdir()))); await rm(folder,{recursive:true,force:true}); });
@@ -182,6 +195,37 @@ test('prepare does not seed missing demonstrations and rejects unknown business 
   unknown.snapshot.schema.push({type:'table',name:'future_orders',tbl_name:'future_orders',sql:'CREATE TABLE future_orders(id TEXT)'});
   unknown.snapshot.tables.push({name:'future_orders',columns:[{name:'id',type:'TEXT'}],count:0,rows:[]}); unknown.snapshot.counts.future_orders=0;
   assert.throws(()=>prepareMigration({snapshot:unknown.snapshot,objects:unknown.objects,schemaSql:SCHEMA}),{code:'UNKNOWN_SOURCE_TABLE'});
+});
+
+test('the exact platform migration table stays unchanged in the hashed private source snapshot and is explicitly excluded only from business import',async t=>{
+  const data=addPlatformMigrationMetadata(fixture()),directory=await temporary(t);
+  const original=JSON.stringify(data.snapshot),originalHash=sha256(original);
+  await exportSource({token:TOKEN,directory,fetch:transport(data).fetch});
+  const loaded=await loadExport(directory);
+  assert.equal(JSON.stringify(loaded.snapshot),original);
+  const prepared=prepareMigration({snapshot:loaded.snapshot,objects:loaded.manifest.objects,schemaSql:SCHEMA});
+  assert.deepEqual(prepared.summary.sourceMigrationMetadataCounts,{__appgarden_migrations:5});
+  assert.equal(prepared.expected.tables.length,12);
+  assert(!prepared.expected.tables.some(table=>table.name==='__appgarden_migrations'));
+  assert(!prepared.sql.includes('__appgarden_migrations'));assert(!prepared.sql.includes('fixture-platform-'));
+  assert.equal(sha256(JSON.stringify(data.snapshot)),originalHash);
+  assert.equal(sha256(JSON.stringify(loaded.snapshot)),originalHash);
+  assert.equal(loaded.snapshot.tables.find(table=>table.name==='__appgarden_migrations').count,5);
+});
+
+test('a same-name platform table with business columns or changed constraints is refused rather than dropped',()=>{
+  for(const alter of [
+    data=>{const table=data.snapshot.tables.find(table=>table.name==='__appgarden_migrations');table.columns.push({cid:3,name:'private_contact',type:'TEXT',notnull:0,dflt_value:null,pk:0});for(const row of table.rows)row.private_contact='preserve-me';},
+    data=>{data.snapshot.schema.find(entry=>entry.type==='table'&&entry.name==='__appgarden_migrations').sql=data.snapshot.schema.find(entry=>entry.type==='table'&&entry.name==='__appgarden_migrations').sql.replace('TEXT UNIQUE','TEXT');},
+    data=>{data.snapshot.tables.find(table=>table.name==='__appgarden_migrations').columns[2].dflt_value=null;},
+  ]) {
+    const data=addPlatformMigrationMetadata(fixture());alter(data);
+    assert.throws(()=>prepareMigration({snapshot:data.snapshot,objects:data.objects,schemaSql:SCHEMA}),{code:'INVALID_SOURCE_MIGRATION_METADATA'});
+  }
+  const data=fixture(),name='__appgarden_future_business';
+  data.snapshot.schema.push({type:'table',name,tbl_name:name,sql:`CREATE TABLE ${name}(id TEXT)`});
+  data.snapshot.tables.push({name,columns:[{name:'id',type:'TEXT'}],rows:[],count:0});data.snapshot.counts[name]=0;
+  assert.throws(()=>prepareMigration({snapshot:data.snapshot,objects:data.objects,schemaSql:SCHEMA}),{code:'UNKNOWN_SOURCE_TABLE'});
 });
 
 test('future conversations and messages retain membership, sender and exact private contents',()=>{

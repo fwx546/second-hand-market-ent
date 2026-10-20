@@ -1,10 +1,10 @@
 # 橘子集 · 西交利物浦大学校园二手交易平台
 
-面向西交利物浦大学的 SIP 校区与太仓校区，交易类别为小电器、电瓶车和生活用品。保留原生 HTML/CSS/JavaScript 界面，使用 Sites 官方 Vinext 后端、D1 数据库和 R2 图片存储。首页、商品详情、发布与个人中心均适配桌面和手机。
+面向西交利物浦大学的 SIP 校区与太仓校区，交易类别为小电器、电瓶车和生活用品。保留原生 HTML/CSS/JavaScript 界面，正式站使用 Cloudflare Workers、D1 数据库和 Supabase 私有图片存储。首页、商品详情、发布与个人中心均适配桌面和手机。原 Sites/Vinext 实现仍保留用于本地开发和历史站维护；独立部署配置见 [cloudflare/README.md](cloudflare/README.md)。
 
 本站提供**学校邮箱验证码登录**和**访客浏览**。访客可搜索、筛选和查看公开商品；发布、收藏、卖家联系方式和个人记录需要学校邮箱认证。验证码证明控制 `@student.xjtlu.edu.cn` 邮箱，**不代表核实当前在读学籍或所在校区**。账号昵称按邮箱前缀去数字生成，商品卖家昵称可在发布前编辑；完整登录邮箱不作为公开卖家资料。具体字段和下架效果见 [PRIVACY.md](PRIVACY.md)。
 
-交易仍通过卖家联系方式沟通和线下面交完成；当前没有站内私信、订单或支付功能。
+买卖双方可通过站内消息或卖家联系方式沟通，交易通过线下面交完成；当前没有订单或支付功能。
 
 ## 本地启动
 
@@ -67,11 +67,11 @@ npm run check
 | --- | --- |
 | 原生界面 | `public/app.js`、`public/styles.css`；`public/data.js` 只保留分类等界面常量，不包含示例商品 |
 | HTML 入口 | `legacy/index.html`；根路由 `app/route.ts` 以 raw HTML 返回它 |
-| 交易接口 | `server/market.mjs` 与 `app/api/[[...path]]/route.ts`，处理身份、商品、收藏、联系方式和图片权限 |
+| 交易接口 | `server/market.mjs` 为共享业务；正式站由 `cloudflare/worker.mjs` 调用，本地/历史 Vinext 入口为 `app/api/[[...path]]/route.ts` |
 | 示例目录 | `server/demo-catalog.mjs` 与 `0004_public_demo_catalog.sql`；数据库保存明确标记的示例记录，照片仅映射到已有素材白名单，不保存虚构联系号或创建学校邮箱账号 |
 | 学校邮箱认证与邮件 | `server/school-auth.mjs` 处理验证码、昵称、限流与会话；`gmail-apps-script/` 提供 Google 托管的发信程序，准备入口 `npm run mail:gmail:setup`；`relay/` 和 `mail:setup` 保留 QQ 备选，另支持 Resend |
-| 数据模型与迁移 | `db/schema.ts`、`drizzle/`；D1 存记录，R2 存照片内容 |
-| 托管关联 | `.openai/hosting.json`，使用已有项目及 `DB`、`BUCKET` 绑定 |
+| 数据模型与迁移 | `db/schema.ts`、`drizzle/`；正式站 D1 存记录，Supabase 私有桶存照片；独立初始结构见 `cloudflare/migrations/` |
+| 托管关联 | `cloudflare/wrangler.json` 是正式站配置；`.openai/hosting.json` 保留历史 Sites 身份及绑定，不作为 Cloudflare 部署配置 |
 | 设计交付 | `design/` 与设计生成脚本；`design/demo-data.js` 中的旧假商品只用于静态 SVG 生成 |
 
 **`dist/` 已改为可重新生成的构建产物，不再是手写源码。** 请修改上表中的源文件，再运行构建；不要直接编辑 `dist/`。项目的开发命令、清单和相对路径均以仓库根目录为准。
@@ -90,8 +90,8 @@ npm run check
 
 QQ 本地链路曾完成真实学校收件、同一浏览器验证码登录和刷新保持会话；这不代表 Gmail 或生产环境已经验收。验证码错误、过期等边界的受控测试和实际收件结果分别记录。当前 Google 授权、Web 应用部署、Sites 发布、学校收件与生产会话结果见 [QA.md](QA.md)，不能只因代码准备或接口确认就宣称全部开通。
 
-已有托管网址：<https://juzi-campus-market.open-bloom-6517.chatgpt.site>。Gmail 路径使用 Google 分配的 HTTPS Web 应用地址，Sites 服务端以签名请求调用，不要求学生访问 Google 或授予权限。正式邮件额度与实际送达仍受 Google 和学校收件系统限制。
+正式托管网址：<https://juzi-campus-market.wenxin-fu23.workers.dev>。旧网址 <https://juzi-campus-market.open-bloom-6517.chatgpt.site> 保留为只读历史站，数据不会继续双向同步。Gmail 路径使用 Google 分配的 HTTPS Web 应用地址，网站服务端以签名请求调用，不要求学生访问 Google 或授予权限。正式邮件额度与实际送达仍受 Google 和学校收件系统限制。
 
 Google 账号授权、正式脚本部署和平台秘密值需实际完成后才能启用 Sites 发信；步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)。公开访问、邮件送达和权限分别验收，Cloudflare 拦截结果单独记录，本地成功不能替代公网验收。
 
-**GitHub push 或合并 PR 不会自动部署 Sites。** 数据库版需要通过 Sites 发布到已有项目，步骤和发布记录要求见 [DEPLOYMENT.md](DEPLOYMENT.md)。旧静态版的浏览器验收记录仅说明旧版本行为，不代表数据库版自动通过。
+**GitHub push 或合并 PR 不会自动部署正式站，也不会自动部署历史 Sites。** 修改后需按 [独立托管说明](cloudflare/README.md) 构建并用 Wrangler 发布；[历史 Sites 流程](DEPLOYMENT.md) 仅供维护旧站。旧静态版的浏览器验收记录仅说明旧版本行为，不代表当前数据库版自动通过。

@@ -1,5 +1,10 @@
 # 数据库版部署与更新
 
+当前正式站为 <https://juzi-campus-market.wenxin-fu23.workers.dev>，使用独立
+Cloudflare Workers/D1 与 Supabase 私有图片存储。更新正式站请使用
+[独立托管部署说明](cloudflare/README.md)。下文 Sites/Vinext 流程仅用于历史站和
+本地开发；旧站迁移后保持只读，不能重新开启写入来代替新站更新。
+
 本项目采用 Sites 官方 Vinext 运行时，原生界面、API、D1 和 R2 作为同一个应用发布。**不能再把旧静态目录直接上传来获得数据库功能。** `public/`、`legacy/`、`app/` 和 `server/` 是源码；`dist/` 由构建生成。
 
 公网邮件首选 **Gmail + Google Apps Script**，继续使用已有 Sites 应用和数据库，不购买发件域名或租用 Node 服务器。用户已选择暂不产生费用，Render 仅保留 QQ 部署包，未创建收费资源。Gmail 代码接入、账号授权、正式脚本部署、Sites 私密配置及实际收件分别验收；在发送准备完成前保持关闭，实际状态以 [QA.md](QA.md) 为准。

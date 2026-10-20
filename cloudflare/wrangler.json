@@ -21,7 +21,7 @@
     }
   ],
   "vars": {
-    "JUZI_SITE_ENABLED": "false",
+    "JUZI_SITE_ENABLED": "true",
     "JUZI_EMAIL_ENABLED": "true",
     "JUZI_EMAIL_PROVIDER": "gmail_apps_script",
     "JUZI_EMAIL_DAILY_LIMIT": "50",

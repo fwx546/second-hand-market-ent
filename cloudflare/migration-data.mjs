@@ -10,6 +10,13 @@ export const IMPORT_ORDER = Object.freeze(['users', 'products', 'media', 'school
 export const RESET_AUTH = Object.freeze(['auth_flows', 'auth_sessions', 'school_email_challenges']);
 const KNOWN = new Set([...IMPORT_ORDER, ...RESET_AUTH]);
 const HASH = /^[a-f0-9]{64}$/;
+const PLATFORM_MIGRATION_TABLE = '__appgarden_migrations';
+const PLATFORM_MIGRATION_DDL = 'CREATE TABLE "__appgarden_migrations"(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)';
+const PLATFORM_MIGRATION_COLUMNS = [
+  { cid: 0, name: 'id', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 },
+  { cid: 1, name: 'name', type: 'TEXT', notnull: 0, dflt_value: null, pk: 0 },
+  { cid: 2, name: 'applied_at', type: 'TIMESTAMP', notnull: 1, dflt_value: 'CURRENT_TIMESTAMP', pk: 0 },
+];
 export class MigrationError extends Error {
   constructor(code) { super(code); this.name = 'MigrationError'; this.code = code; }
 }
@@ -220,6 +227,20 @@ export function tableDigest(columns, rows) {
   return sha256(JSON.stringify({ columns: names, rows: normalized.map(stable) }));
 }
 
+function sourceMigrationMetadata(snapshot, source) {
+  const table = source.get(PLATFORM_MIGRATION_TABLE);
+  if (!table) return {};
+  // This single known platform bookkeeping table remains in the original
+  // private snapshot. Never execute source DDL or broadly skip unknown tables.
+  const entries = snapshot.schema.filter(entry => entry.type === 'table' && entry.name === PLATFORM_MIGRATION_TABLE);
+  const normalizeDdl = sql => typeof sql === 'string' ? sql.trim().replace(/;$/, '').trim().replace(/\s+/g, ' ').replace(/\s*([(),])\s*/g, '$1').toLowerCase() : null;
+  if (entries.length !== 1 || entries[0].tbl_name !== PLATFORM_MIGRATION_TABLE
+    || normalizeDdl(entries[0].sql) !== normalizeDdl(PLATFORM_MIGRATION_DDL)
+    || JSON.stringify(stable(table.columns)) !== JSON.stringify(stable(PLATFORM_MIGRATION_COLUMNS))) fail('INVALID_SOURCE_MIGRATION_METADATA');
+  source.delete(PLATFORM_MIGRATION_TABLE);
+  return { [PLATFORM_MIGRATION_TABLE]: table.count };
+}
+
 /** Trusted target DDL only. Source SQL is never executed. */
 export function prepareMigration({ snapshot, objects, schemaSql }) {
   validateSnapshot(snapshot); validateMediaObjects(snapshot, objects);
@@ -229,6 +250,7 @@ export function prepareMigration({ snapshot, objects, schemaSql }) {
     const names = db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(row => row.name);
     if (names.some(name => !KNOWN.has(name)) || [...KNOWN].some(name => !names.includes(name))) fail('UNEXPECTED_TARGET_SCHEMA');
     const source = new Map(snapshot.tables.map(table => [table.name, table]));
+    const sourceMigrationMetadataCounts = sourceMigrationMetadata(snapshot, source);
     if ([...source.keys()].some(name => !KNOWN.has(name))) fail('UNKNOWN_SOURCE_TABLE');
     const columns = Object.fromEntries(names.map(name => [name, db.prepare(`PRAGMA table_info(${identifier(name)})`).all()]));
     for (const table of source.values()) {
@@ -264,7 +286,7 @@ export function prepareMigration({ snapshot, objects, schemaSql }) {
       return { name, columns: columns[name], count: rows.length, rows, sha256: tableDigest(columns[name], rows) };
     }) };
     const sql = '-- PRIVATE migrated application data. Do not commit or print.\n-- REQUIREMENT: all destination business/auth tables must be empty before execution.\n' + inserts.join('\n') + '\n';
-    return { sql, expected, summary: { tableCounts: Object.fromEntries(expected.tables.map(table => [table.name, table.count])), resetAuthCounts: Object.fromEntries(RESET_AUTH.map(name => [name, source.get(name)?.count || 0])), sqlSha256: sha256(sql), foreignKeysValid: true } };
+    return { sql, expected, summary: { tableCounts: Object.fromEntries(expected.tables.map(table => [table.name, table.count])), resetAuthCounts: Object.fromEntries(RESET_AUTH.map(name => [name, source.get(name)?.count || 0])), sourceMigrationMetadataCounts, sqlSha256: sha256(sql), foreignKeysValid: true } };
   } finally { db.close(); }
 }
 
