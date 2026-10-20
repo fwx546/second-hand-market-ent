@@ -27,7 +27,7 @@ async function fixture(t) {
 
 test('schema snapshot exactly matches all migrations and contains only empty business tables', async () => {
   const actual = await readFile(join(ROOT, 'cloudflare/migrations/0001_schema.sql'), 'utf8');
-  assert.equal(actual, await cloudflareSchema({ root: ROOT }));
+  assert.equal(actual.replace(/\r\n?/g, '\n'), await cloudflareSchema({ root: ROOT }));
   assert(!/^\s*(?:INSERT|UPDATE|DELETE)\s|demo_juzi_|juzi_demo_catalog/m.test(actual));
   const db = new DatabaseSync(':memory:');
   try {
@@ -58,6 +58,34 @@ test('schema snapshot exactly matches all migrations and contains only empty bus
 test('schema generator checks immutable output without rewriting it', async () => {
   const result = await generateCloudflareSchema({ root: ROOT, check: true });
   assert.equal(result.schemaOnly, true); assert.equal(result.tables, 12); assert.equal(result.matches, true);
+});
+
+test('LF, CRLF and mixed migration checkouts produce the same schema without rewriting applied history', async t => {
+  const files = (await readdir(join(ROOT, 'drizzle'))).filter(file => /^\d+_[A-Za-z0-9_]+\.sql$/.test(file)).sort();
+  const expected = await cloudflareSchema({ root: ROOT });
+  const appliedBefore = await readFile(join(ROOT, 'cloudflare/migrations/0001_schema.sql'));
+  for (const style of ['lf', 'crlf', 'mixed']) {
+    const root = await fixture(t);
+    await mkdir(join(root, 'drizzle'));
+    await mkdir(join(root, 'cloudflare/migrations'));
+    for (let index = 0; index < files.length; index++) {
+      const sql = (await readFile(join(ROOT, 'drizzle', files[index]), 'utf8')).replace(/\r\n?/g, '\n');
+      await writeFile(join(root, 'drizzle', files[index]), style === 'crlf' || style === 'mixed' && index % 2 ? sql.replace(/\n/g, '\r\n') : sql);
+    }
+    assert.equal(await cloudflareSchema({ root }), expected);
+    assert(!expected.includes('\r'));
+    const snapshot = join(root, 'cloudflare/migrations/0001_schema.sql');
+    const initialBytes = Buffer.from(style === 'crlf' ? expected.replace(/\n/g, '\r\n') : expected);
+    await writeFile(snapshot, initialBytes);
+    assert.equal((await generateCloudflareSchema({ root, check: true })).matches, true);
+    assert.deepEqual(await readFile(snapshot), initialBytes);
+    // A real new index must still fail, including when its source uses CRLF.
+    const last = join(root, 'drizzle', files.at(-1));
+    await writeFile(last, (await readFile(last, 'utf8')) + '\r\nCREATE INDEX ci_snapshot_regression ON users(created_at);\r\n');
+    await assert.rejects(generateCloudflareSchema({ root, check: true }), /Initial schema snapshot differs/);
+    assert.deepEqual(await readFile(snapshot), initialBytes);
+  }
+  assert.deepEqual(await readFile(join(ROOT, 'cloudflare/migrations/0001_schema.sql')), appliedBefore);
 });
 
 test('static build includes only public UI and attribution, never environment or database backups', async t => {

@@ -6,6 +6,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const CLOUDFLARE_TABLES = Object.freeze(['auth_flows', 'auth_sessions', 'conversations', 'favorites', 'media', 'messages', 'private_contacts', 'product_media', 'products', 'school_email_accounts', 'school_email_challenges', 'users']);
+const canonicalLf = sql => sql.replace(/\r\n?/g, '\n');
+// The applied initial snapshot recorded a mixed LF/CRLF checkout checksum.
+// Preserve that immutable header only for this exact canonical migration set;
+// any content/filename change still gets its own checksum and fails the check.
+const INITIAL_CANONICAL_SOURCE_SHA256 = '9325ed2bc852843a61862d795c24c70ae9bccdd1b5b727c43c95ea0ec9c278bd';
+const INITIAL_RECORDED_SOURCE_SHA256 = '8139501b2574811e407abfda82cd527370830517f7b5ff92a3dea76a907d3a2b';
 
 export async function cloudflareSchema({ root = ROOT } = {}) {
   const db = new DatabaseSync(':memory:');
@@ -14,7 +20,7 @@ export async function cloudflareSchema({ root = ROOT } = {}) {
     if (!files.length) throw new Error('No source schema migrations found.');
     const digest = createHash('sha256');
     for (const file of files) {
-      const sql = await readFile(join(root, 'drizzle', file), 'utf8');
+      const sql = canonicalLf(await readFile(join(root, 'drizzle', file), 'utf8'));
       digest.update(file).update('\0').update(sql).update('\0');
       db.exec(sql);
     }
@@ -34,7 +40,9 @@ export async function cloudflareSchema({ root = ROOT } = {}) {
     }
     const ddl = [...ordered, ...rows.filter(row => row.type === 'index')].map(row => `${row.sql.replace(/;\s*$/, '')};`).join('\n\n');
     if (/\b(?:INSERT|UPDATE|DELETE|REPLACE)\s+(?:INTO|FROM|OR|users\b|products\b)/i.test(ddl)) throw new Error('Schema export must not contain data writes.');
-    return `-- Independent Cloudflare D1 schema, with no user, product or demo rows.\n-- Source migrations SHA-256: ${digest.digest('hex')}\n-- Regenerate/check with scripts/generate-cloudflare-schema.mjs.\n\n${ddl}\n`;
+    const sourceDigest = digest.digest('hex');
+    const recordedDigest = sourceDigest === INITIAL_CANONICAL_SOURCE_SHA256 ? INITIAL_RECORDED_SOURCE_SHA256 : sourceDigest;
+    return `-- Independent Cloudflare D1 schema, with no user, product or demo rows.\n-- Source migrations SHA-256: ${recordedDigest}\n-- Regenerate/check with scripts/generate-cloudflare-schema.mjs.\n\n${ddl}\n`;
   } finally { db.close(); }
 }
 
@@ -42,7 +50,7 @@ export async function generateCloudflareSchema({ root = ROOT, check = false } = 
   const sql = await cloudflareSchema({ root }), target = join(root, 'cloudflare', 'migrations', '0001_schema.sql');
   let existing;
   try { existing = await readFile(target, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  if (existing !== undefined && existing !== sql) throw new Error('Initial schema snapshot differs. Add a reviewed new migration after deployment; do not rewrite applied history.');
+  if (existing !== undefined && canonicalLf(existing) !== sql) throw new Error('Initial schema snapshot differs. Add a reviewed new migration after deployment; do not rewrite applied history.');
   if (check && existing === undefined) throw new Error('Cloudflare schema snapshot is missing.');
   if (!check && existing === undefined) { await mkdir(dirname(target), { recursive: true }); await writeFile(target, sql, 'utf8'); }
   return { path: target, tables: CLOUDFLARE_TABLES.length, schemaOnly: true, matches: true };
