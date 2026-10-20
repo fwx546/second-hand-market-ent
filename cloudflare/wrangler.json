@@ -25,8 +25,6 @@
     "JUZI_EMAIL_ENABLED": "true",
     "JUZI_EMAIL_PROVIDER": "gmail_apps_script",
     "JUZI_EMAIL_DAILY_LIMIT": "50",
-    "SUPABASE_STORAGE_BUCKET": "juzi-market-private",
-    "SUPABASE_URL": "https://igulpkuyggfxlqojnzyi.supabase.co",
     "JUZI_EMAIL_ORIGIN": "https://juzi-campus-market.wenxin-fu23.workers.dev"
   },
   "observability": {
