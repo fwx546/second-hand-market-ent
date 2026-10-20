@@ -94,4 +94,4 @@ QQ 本地链路曾完成真实学校收件、同一浏览器验证码登录和�
 
 Google 账号授权、正式脚本部署和平台秘密值需实际完成后才能启用 Sites 发信；步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)。公开访问、邮件送达和权限分别验收，Cloudflare 拦截结果单独记录，本地成功不能替代公网验收。
 
-**GitHub push 或合并 PR 不会自动部署正式站，也不会自动部署历史 Sites。** 修改后需按 [独立托管说明](cloudflare/README.md) 构建并用 Wrangler 发布；[历史 Sites 流程](DEPLOYMENT.md) 仅供维护旧站。旧静态版的浏览器验收记录仅说明旧版本行为，不代表当前数据库版自动通过。
+**GitHub 的 `main` 分支更新后，由 Cloudflare Workers Builds 自动测试、构建并发布正式站。** 其他分支不发布预览；测试或构建失败会停止本次发布。你和协作者可通过分支与 PR 审核后合并到 `main`，无需手动发布，具体配置、日志和回滚见 [自动部署协作指南](docs/cloudflare-auto-deploy.md)。沿用免费套餐、现有数据库、图片和邮箱 Secrets；自动部署不执行数据库迁移或初始化。[历史 Sites 流程](DEPLOYMENT.md) 仅供维护旧站，不参与此自动部署。

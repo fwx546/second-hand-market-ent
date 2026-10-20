@@ -133,7 +133,7 @@
 ## 独立免费托管迁移与验收（2026-10-20）
 
 - 已核实 Cloudflare Workers/D1 为 Free、Supabase 组织为 Free；未添加付款方式、开通 R2 或购买付费服务。
-- 真实新站已启用：`https://juzi-campus-market.wenxin-fu23.workers.dev`，当前版本 `b759d922-17a2-4bc3-a9eb-5cda533d40e8`，`JUZI_SITE_ENABLED=true`。用户确认自己的设备能打开网页；本机浏览器仍连接超时，因此用户访问确认与本机验收分开记录。
+- 真实新站已启用：`https://juzi-campus-market.wenxin-fu23.workers.dev`，迁移验收版本 `b759d922-17a2-4bc3-a9eb-5cda533d40e8`，`JUZI_SITE_ENABLED=true`。用户确认自己的设备能打开网页；本机浏览器仍连接超时，因此用户访问确认与本机验收分开记录。
 - 用户已通过自己的正常浏览器下载真实完整备份。本机适配器验证通过：11 张原图、2,322,688 字节，SHA-256、可用原始 MD5 ETag、大小和图片签名均通过。原始快照和哈希完整保留。
 - 源站冻结写入后，原生查看器全量读取业务表并与下载备份逐表比较字段、行数和类型敏感哈希，7 张持久业务表全部匹配；表名集合一致。仅在目标重置 3 张临时认证表。用户、邮箱绑定、商品归属、联系方式、图片关联和收藏记录保持一致。
 - 目标空库检查通过后执行一次导入。目标 12 张表全量回读的行数和哈希全部匹配，`PRAGMA foreign_key_check` 为空；6 个用户记录（含示例账号）、5 个学校邮箱绑定、29 件在售商品（11 件真实、18 件示例）、11 个媒体记录已迁入。
@@ -148,4 +148,14 @@
 - 新增本机转换器验证严格本地 JSON、SHA-256、可用 MD5 ETag、大小及图片签名，防止覆盖私有运行目录；超过读取限额及时停止。不会在转换阶段写入云数据库或图片桶。
 
 日志：`artifacts/browser-export-source-tests.log`、`artifacts/cloudflare-migrated-tests.log`。私有运行目录记录原始备份、冻结比较结果、预期与实际目标行、图片回读进度和哈希；真实账号数据、联系资料、备份、凭据和构建产物均不提交公开仓库。
+
+## GitHub main 自动部署（2026-10-20）
+
+- Cloudflare 原生 GitHub App 只连接 `fwx546/second-hand-market-ent`；生产分支为 `main`，根目录 `/`，非主分支预览关闭。GitHub App 及 Cloudflare 自动构建凭据的实际权限已经用户逐项确认。
+- Cloudflare 控制台确认 Workers Free 是 Current plan，价格 $0；Workers Builds Free 每月 3,000 分钟、并发 1。未升级、添加付款方式或开通新收费资源。
+- 首次构建 `dabc7e59-30c4-4f9a-990a-288b2f120d98` 因跨系统 SQL 换行校验失败（217/219），未进入部署。修复对源 SQL 换行规范化，并严格限定初始内容的历史校验和兼容；已应用的初始迁移文件字节未变。新增测试验证 LF、CRLF、混合输入以及真实 DDL 变化仍拒绝。
+- 推送 `main` 提交 `8da600b` 后，无手动发布操作，Cloudflare 自动产生构建 `fd1ae589-011b-489f-af21-ec66f6cebde1`。Node 22.23.3 安装依赖，220/220 测试通过，静态构建成功，Wrangler 4.151.2 正式部署成功，版本 `770d453c-35ca-49fd-a5e4-daca9e6b8e86`，总耗时 1 分 9 秒。
+- 构建命令为 `npm test && npm run build:cloudflare`，部署显式使用 `--config cloudflare/wrangler.json`，沿用原 Worker、D1 ID 与域名；不执行迁移、seed 或导入。生产 Supabase URL/bucket 沿用既有远端 Secrets，已移除配置中同名普通变量，避免类型冲突。
+- 本地 220/220 测试、schema 检查、静态构建及差异检查通过。此轮本机对正式网址仍有网络连接限制，因此发布成功以 Cloudflare 原生构建与版本记录为证；本轮未向真实邮箱发送验证码，先前用户真实登录验收见上节。
+- 部署命令随后追加 `node scripts/check-cloudflare-production.mjs`，由云端构建环境匿名检查登录配置、商品列表和一张图片，仅输出安全汇总；7 项本地模拟场景通过。真实检查结果以对应构建的末尾日志为准；不会发验证码或自动回滚已完成的部署。
 

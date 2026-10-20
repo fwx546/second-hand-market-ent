@@ -1,5 +1,17 @@
 # Standalone hosting runtime
 
+原生 Workers Builds 的 `main` 自动发布已于 **2026-10-20 实测成功**，配置和协作流程见
+[自动部署指南](../docs/cloudflare-auto-deploy.md)。CI 在仓库根目录使用 Node 22：
+
+```text
+Build:  npm test && npm run build:cloudflare
+Deploy: npx --yes wrangler@4.151.2 deploy --config cloudflare/wrangler.json && node scripts/check-cloudflare-production.mjs
+```
+
+CI 只构建和部署代码，不执行数据库迁移、初始化、示例数据或私有备份导入。
+下文的本机 `node_modules/wrangler` 命令属于首次部署/历史迁移参考；仓库锁定的
+本机版本为 4.92.0，不能替代上述 CI 明确指定的 4.151.2。
+
 ## 账号、免费方案与所有权
 
 Cloudflare 和 Supabase 账号与 ChatGPT 账号独立。本次按用户最新授权使用
@@ -67,6 +79,14 @@ node scripts/configure-cloudflare.mjs --account-id $cfAccountId --database-id $c
 账号 ID、数据库 UUID、项目 URL 不是密钥；该文件可以随源码提交。生成器
 默认将 `JUZI_SITE_ENABLED` 设为 `false`，拒绝更换已配置的账户/数据库，也
 拒绝 R2、付费资源绑定及写在 vars 中的密钥。
+
+上述配置器和示例模板用于新环境的首次准备，会将 Supabase URL/bucket 配置为
+普通变量。**当前生产环境已将 `SUPABASE_URL` 和 `SUPABASE_STORAGE_BUCKET`
+保存为现有远端 Worker Secrets**；实际跟踪的 `cloudflare/wrangler.json` 因此不再
+在 `vars` 中重复声明这两个名字。正常发布沿用这两项绑定，运行时保持不变；
+不要为日常发布重新运行首次配置器，也不要把它们再次添加到生产 `vars`，以免
+与同名 Secret 冲突或覆盖其类型。其他邮箱和 Storage 凭据同样保留在远端 Secrets，
+无需复制本机 `.env` 到 CI。
 
 部署时必须明确指定 `--config cloudflare/wrangler.json`。例如，在完成免费
 资源核验后，由有权限的操作者运行本地已安装的 Wrangler：
