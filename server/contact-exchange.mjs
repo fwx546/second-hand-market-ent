@@ -9,6 +9,10 @@ const first = (db, sql, values = []) => stmt(db, sql, values).first();
 const json = (value, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 
 export async function contactExchangeReady(db) {
+  // The earlier products rebuild cascades through conversations. Require its
+  // migration before exchanges can contain data, even if tables were added out of order.
+  const products = await first(db, "SELECT sql FROM sqlite_master WHERE type='table' AND name='products'");
+  if (!products?.sql?.includes("'service'") || !products.sql.includes("'不适用'")) return false;
   return Boolean(await first(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='contact_exchanges'"));
 }
 function contact(body) {
@@ -35,6 +39,9 @@ function publicExchange(row, userId, now) {
   return value;
 }
 async function state(db, conversationId, userId, now) {
+  // Opportunistic expiry cleanup on the next authorized visit, never a promise
+  // of a background timer or immediate erasure at the exact expiry instant.
+  await stmt(db, "UPDATE contact_exchanges SET status='expired', requester_value='', responder_value=NULL, updated_at=? WHERE conversation_id=? AND status='pending' AND expires_at<=?", [now, conversationId, now]).run();
   const row = await first(db, 'SELECT * FROM contact_exchanges WHERE conversation_id=? ORDER BY created_at DESC, rowid DESC LIMIT 1', [conversationId]);
   return { enabled: true, exchange: publicExchange(row, userId, now) };
 }

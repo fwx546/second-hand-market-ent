@@ -55,6 +55,7 @@ test('exchange endpoints enforce identity, participants, Origin, fields, validit
   const created=await request(s),id=created.data.exchange.id;
   s.env.DB.sqlite.prepare('UPDATE contact_exchanges SET expires_at=? WHERE id=?').run(Date.now()-1,id);
   assert.equal((await read(s,A)).data.exchange.status,'expired');
+  assert.equal(s.env.DB.sqlite.prepare('SELECT requester_value FROM contact_exchanges WHERE id=?').get(id).requester_value,'');
   assert.equal((await act(s,A,'accept',id,{type:'wechat',value:'another_value',consent:true})).status,409);
   assert.equal((await request(s)).status,201);
 });
@@ -75,6 +76,16 @@ test('old production database retains private chat and safely gates exchange unt
   assert.deepEqual((await read(s,A)).data,{enabled:false,exchange:null});assert.equal((await request(s)).status,503);
   assert.equal((await api(s.env,`/api/conversations/${s.conversationId}/messages`,{method:'POST',viewer:B,body:{body:'不交换联系方式也可以沟通'}})).status,201);
   s.env.DB.sqlite.exec(readFileSync(new URL('../cloudflare/migrations/0003_contact_exchanges.sql',import.meta.url),'utf8'));
+  // Out-of-order installation must not enable data that the earlier rebuild could cascade away.
+  assert.equal((await read(s,A)).data.enabled,false);assert.equal((await request(s)).status,503);
+  s.env.DB.sqlite.exec(readFileSync(new URL('../cloudflare/migrations/0002_service_listings.sql',import.meta.url),'utf8'));
   assert.equal((await read(s,A)).data.enabled,true);assert.equal((await request(s)).status,201);
   assert.deepEqual(s.env.DB.sqlite.prepare('PRAGMA foreign_key_check').all(),[]);
+});
+
+test('repeated cancelled requests are rate limited while ordinary chat stays available',async t=>{
+  const s=await setup(t);
+  for(let i=0;i<3;i++){const created=await request(s);assert.equal(created.status,201);assert.equal((await act(s,B,'cancel',created.data.exchange.id)).status,200);}
+  assert.equal((await request(s)).status,429);
+  const message=await api(s.env,`/api/conversations/${s.conversationId}/messages`,{method:'POST',viewer:B,body:{body:'我们继续在站内聊'}});assert.equal(message.status,201);
 });

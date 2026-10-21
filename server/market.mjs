@@ -511,7 +511,7 @@ export async function handleMarket(request, env, viewer = null, { development = 
           email: { configured: false, domain: 'student.xjtlu.edu.cn', sendUrl: '/api/auth/email/send', verifyUrl: '/api/auth/email/verify' },
           guest: { enabled: true, startUrl: '/api/auth/guest' },
         },
-        capabilities: { canPublish: Boolean(viewer), canViewContact: Boolean(viewer), canFavorite: Boolean(viewer), schoolVerificationRequired: false, servicePublishingReady: await serviceSchemaReady(db) },
+        capabilities: { canPublish: Boolean(viewer), canViewContact: false, canRequestContactExchange: Boolean(viewer), canFavorite: Boolean(viewer), schoolVerificationRequired: false, servicePublishingReady: await serviceSchemaReady(db) },
       });
     }
     if (path === '/api/me' && method === 'PATCH') return await updateProfile(request, db, viewer);
