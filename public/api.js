@@ -30,6 +30,8 @@ export const api={
   product:id=>request(productPath(id)),contact:id=>request(`${productPath(id)}/contact`),
   mine:()=>itemList('/api/me/products'),favorites:()=>itemList('/api/me/favorites'),
   conversations:()=>itemList('/api/me/conversations'),startConversation:productId=>request('/api/conversations',{method:'POST',body:{productId}}),
+  contactExchange:id=>request(`/api/conversations/${encodeURIComponent(id)}/contact-exchange`),
+  exchangeContact:(id,body)=>request(`/api/conversations/${encodeURIComponent(id)}/contact-exchange`,{method:'POST',body}),
   messages:id=>itemList(`/api/conversations/${encodeURIComponent(id)}/messages`),sendMessage:(id,body)=>request(`/api/conversations/${encodeURIComponent(id)}/messages`,{method:'POST',body:{body}}),
   favorite:(id,liked)=>request(`/api/me/favorites/${encodeURIComponent(id)}`,{method:liked?'PUT':'DELETE'}),
   save:(id,body)=>request(id?productPath(id):'/api/products',{method:id?'PATCH':'POST',body}),

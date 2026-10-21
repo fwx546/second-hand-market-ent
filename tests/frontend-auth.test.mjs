@@ -17,7 +17,7 @@ function client(session=guestSession(),api={}){
   const context={URL,URLSearchParams,FormData:TestFormData,console,api,categories:[],location,history:{replaceState(_a,_b,hash){location.hash=hash;}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},
     document:{querySelector:s=>elements[s]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(){},body:{classList:{add(){},remove(){}}}},
     window:{scrollTo(){},top:{location:{assign(path){navigation.push(path);}}},addEventListener(name,fn){events.set(name,fn);}}};
-  vm.runInNewContext(`${source}\nglobalThis.test={state,home,chips,normalizeFilters,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,captureDraft,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,discardDraft,publish,saveDraft};`,context);
+  vm.runInNewContext(`${source}\nglobalThis.test={state,contactExchangePanel,openContactExchange,updateContactExchange,refreshContactExchange,home,chips,normalizeFilters,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,captureDraft,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,discardDraft,publish,saveDraft};`,context);
   context.test.state.session=session;
   return{...context.test,context,elements,modalRoot,events,navigation};
 }
@@ -304,6 +304,28 @@ test('switching to service filters removes physical filters and exposes matching
   assert(!html.includes('id="condition-filter"'));assert(!c.chips().includes('毕业转让'));assert(html.includes('按标价排序'));
   Object.assign(c.state.filters,{category:'daily',serviceDirection:'学习辅导',serviceMode:'线上服务'});c.normalizeFilters();
   assert.equal(c.state.filters.serviceDirection,'');assert.equal(c.state.filters.serviceMode,'');assert(c.home().includes('id="condition-filter"'));
+});
+
+test('chat exchange cards show no numbers before mutual consent and hide them after revocation',()=>{
+  const c=client(schoolSession());c.state.activeConversation={id:'conversation',otherName:'对方'};
+  c.state.contactExchange={enabled:true,exchange:{id:'exchange_test',status:'pending',direction:'incoming',offeredType:'wechat'}};
+  let html=c.contactExchangePanel();assert(html.includes('同意并选择我的联系方式'));assert(html.includes('暂不交换'));assert(!html.includes('exchange-contacts'));
+  c.openContactExchange('accept');assert(c.modalRoot.innerHTML.includes('exchange-consent'));assert(!c.modalRoot.innerHTML.includes('checked'));
+  assert(c.modalRoot.innerHTML.includes('取消'));assert(c.modalRoot.innerHTML.includes('本次愿意分享的微信号'));
+  c.state.contactExchange.exchange={id:'exchange_test',status:'accepted',contacts:{mine:{type:'qq',value:'12345678'},other:{type:'wechat',value:'private_hello<test>'}}};
+  html=c.contactExchangePanel();assert(html.includes('12345678'));assert(html.includes('private_hello&lt;test&gt;'));assert(html.includes('停止共享'));
+  c.state.contactExchange.exchange={id:'exchange_test',status:'revoked',updatedAt:Date.now()};
+  html=c.contactExchangePanel();assert(!html.includes('private_hello'));assert(!html.includes('12345678'));assert(html.includes('24 小时'));
+  c.state.contactExchange={enabled:false,exchange:null};html=c.contactExchangePanel();assert(html.includes('仍可正常私信'));assert(!html.includes('data-action="exchange-request"'));
+});
+
+test('exchange updates clear private state on logout and ignore a late response from another identity',async()=>{
+  let finish;const c=client(schoolSession('first'),{exchangeContact:()=>new Promise(resolve=>{finish=resolve;})});
+  c.state.activeConversation={id:'conversation'};c.state.contactExchange={enabled:true,exchange:null};
+  const pending=c.updateContactExchange('request','',{type:'wechat',value:'private_first',consent:true});
+  c.clearPersonalState();c.state.session=schoolSession('second');c.state.activeConversation={id:'conversation'};
+  finish({enabled:true,exchange:{id:'exchange_first',status:'accepted',contacts:{mine:{type:'wechat',value:'private_first'},other:{type:'qq',value:'12345678'}}}});
+  await pending;assert.equal(c.state.contactExchange,null);assert(!c.elements['#app'].innerHTML.includes('private_first'));
 });
 
 test('network timeout and caller cancellation abort requests without pretending a successful write',async t=>{

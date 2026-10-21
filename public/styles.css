@@ -1269,6 +1269,23 @@ button:disabled { transform: none !important; }
 }
 
 /* Services share the campus visual language with physical listings. */
+.contact-exchange { padding: 18px 20px; margin: 16px 0; border: 1px solid #eee6d9; border-radius: 16px; background: #fffaf2; }
+.contact-exchange h2 { font-size: 17px; line-height: 1.5; margin: 0 0 8px; }
+.contact-exchange p { font-size: 13px; line-height: 1.7; margin: 7px 0; }
+.contact-exchange .exchange-hint, .exchange-hint { font-size: 12px; color: var(--muted); line-height: 1.7; }
+.contact-exchange.is-shared { background: #f4f7ee; border-color: #dce6d0; }
+.exchange-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.exchange-contacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.exchange-contacts > div { padding: 12px; border-radius: 10px; background: white; min-width: 0; }
+.exchange-contacts span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.exchange-contacts strong { font-size: 16px; user-select: text; overflow-wrap: anywhere; }
+.exchange-consent { margin: 16px 0 10px; align-items: flex-start; font-size: 13px; line-height: 1.6; }
+#exchange-form .form-field { margin-top: 15px; }
+@media (max-width: 600px) {
+  .contact-exchange { padding: 15px; }
+  .exchange-contacts { grid-template-columns: 1fr; }
+  .exchange-actions .button { flex: 1 1 140px; white-space: normal; }
+}
 .category-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .category-card { flex-wrap: wrap; gap: 12px; padding: 18px; }
 .category-card:nth-child(4) { background: #f6f5ed; }
