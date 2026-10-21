@@ -41,9 +41,9 @@ export const products = sqliteTable("products", {
   index("products_owner").on(table.ownerId, table.createdAt),
   check("products_price_valid", sql`${table.priceCents} > 0 AND ${table.priceCents} <= 10000000 AND ${table.originalPriceCents} >= 0 AND ${table.originalPriceCents} <= 10000000`),
   check("products_status_valid", sql`${table.status} IN ('active', 'inactive')`),
-  check("products_category_valid", sql`${table.category} IN ('appliance', 'ebike', 'daily')`),
+  check("products_category_valid", sql`${table.category} IN ('appliance', 'ebike', 'daily', 'service')`),
   check("products_campus_valid", sql`${table.campus} IN ('SIP 校区', '太仓校区')`),
-  check("products_condition_valid", sql`${table.condition} IN ('全新', '几乎全新', '轻微使用痕迹', '明显使用痕迹')`),
+  check("products_condition_valid", sql`(${table.category} = 'service' AND ${table.condition} = '不适用') OR (${table.category} <> 'service' AND ${table.condition} IN ('全新', '几乎全新', '轻微使用痕迹', '明显使用痕迹'))`),
 ]);
 
 export const privateContacts = sqliteTable("private_contacts", {

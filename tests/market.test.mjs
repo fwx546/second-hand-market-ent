@@ -11,7 +11,7 @@ test('empty schema fixture; identity never publishes account email or full name'
   assert.equal(catalog.status, 200);
   assert.deepEqual(catalog.data.items, []);
   assert.equal(catalog.data.total, 0);
-  assert.deepEqual(catalog.data.categoryCounts, { all: 0, appliance: 0, ebike: 0, daily: 0 });
+  assert.deepEqual(catalog.data.categoryCounts, { all: 0, appliance: 0, ebike: 0, daily: 0, service: 0 });
   const anonymous = await api(env, '/api/me');
   assert.equal(anonymous.data.user, null);
   assert.equal(anonymous.data.development, false);
@@ -197,7 +197,7 @@ test('filters, totals, category counts, stable pagination and sorting reflect da
   assert.equal(page.data.page, 2);
   assert.equal(page.data.pageSize, 1);
   assert.equal(page.data.hasMore, true);
-  assert.deepEqual(page.data.categoryCounts, { all: 3, appliance: 2, ebike: 0, daily: 1 });
+  assert.deepEqual(page.data.categoryCounts, { all: 3, appliance: 2, ebike: 0, daily: 1, service: 0 });
   assert.equal((await api(env, '/api/products?category=appliance&cheap=1&graduation=1&campus=SIP%20校区')).data.items[0].title, '低价毕业风扇');
   assert.equal((await api(env, '/api/products?fresh=1')).data.total, 1);
   assert.equal((await api(env, '/api/products?category=daily&sort=price-desc')).data.items[0].price, 120);

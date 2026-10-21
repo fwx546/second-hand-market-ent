@@ -19,7 +19,7 @@ test('complete production migrations seed 18 clearly fictional public listings a
   assert.equal(result.data.total, 18);
   assert.equal(result.data.demoTotal, 18);
   assert.equal(result.data.realTotal, 0);
-  assert.deepEqual(result.data.categoryCounts, { all: 18, appliance: 6, ebike: 6, daily: 6 });
+  assert.deepEqual(result.data.categoryCounts, { all: 18, appliance: 6, ebike: 6, daily: 6, service: 0 });
   assert.equal(result.data.hasMore, false);
   assert.equal(new Set(result.data.items.map(item => item.id)).size, 18);
   for (const campus of ['SIP 校区', '太仓校区']) {
@@ -106,7 +106,7 @@ test('real and demo goods share filtering, stable pagination and price order wit
   assert.equal(secondPage.items[0].id, 'demo_juzi_18');
   assert.equal(firstPage.total, 20); assert.equal(firstPage.realTotal, 2); assert.equal(firstPage.demoTotal, 18);
   assert.equal(firstPage.hasMore, true);
-  assert.deepEqual(firstPage.categoryCounts, { all: 20, appliance: 7, ebike: 7, daily: 6 });
+  assert.deepEqual(firstPage.categoryCounts, { all: 20, appliance: 7, ebike: 7, daily: 6, service: 0 });
   const query = (await api(env, '/api/products?query=小风扇&sort=price-asc')).data;
   assert.equal(query.total, 2); assert.equal(query.realTotal, 1); assert.equal(query.demoTotal, 1);
   assert.equal(query.items[0].isDemo, false); assert.equal(query.items[1].isDemo, true);

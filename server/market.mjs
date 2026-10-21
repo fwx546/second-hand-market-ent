@@ -1,6 +1,11 @@
 import { demoImages } from './demo-catalog.mjs';
 
-const CATEGORIES = ['appliance', 'ebike', 'daily'];
+const CATEGORIES = ['appliance', 'ebike', 'daily', 'service'];
+const SERVICE_DIRECTIONS = ['学习辅导', '游戏服务', '设计与创作', '技术支持', '生活协助', '其他'];
+const SERVICE_MODES = ['线上服务', '线下服务', '线上／线下均可'];
+const SERVICE_UNITS = ['每次', '每小时', '每课时', '每项', '自定义'];
+const SERVICE_REQUIRED = ['服务方向', '计价单位', '服务方式', '服务范围', '服务时长／交付周期', '预约安排'];
+const SERVICE_OPTIONAL = ['自定义单位', '经验／作品说明', '线上沟通方式'];
 const CAMPUSES = ['SIP 校区', '太仓校区'];
 const CONDITIONS = ['全新', '几乎全新', '轻微使用痕迹', '明显使用痕迹'];
 const CONTACT_TYPES = ['wechat', 'phone', 'qq'];
@@ -92,31 +97,42 @@ function checkFields(body, patch = false) {
   }
 }
 function validateProduct(input) {
+  const service = input.category === 'service';
   const value = {
     title: text(input.title, '商品标题', 1, 100),
     category: choice(input.category, CATEGORIES, '分类'),
     priceCents: cents(input.price, '转让价格', 0.01),
-    originalPriceCents: cents(input.originalPrice, '购入价格', 0),
-    condition: choice(input.condition, CONDITIONS, '成色'),
+    originalPriceCents: service ? 0 : cents(input.originalPrice, '购入价格', 0),
+    condition: service ? '不适用' : choice(input.condition, CONDITIONS, '成色'),
     campus: choice(input.campus, CAMPUSES, '校区'),
-    location: text(input.location, '面交地点', 1, 100),
+    location: service && input.specs?.['服务方式'] === '线上服务' ? '线上服务' : text(input.location, service ? '服务地点' : '面交地点', 1, 100),
     description: text(input.description, '商品描述', 5, 2000, true),
     seller: text(input.seller, '卖家昵称', 1, 30),
     contactType: choice(input.contactType, CONTACT_TYPES, '联系方式类型'),
     contactValue: text(input.contactValue, '联系方式', 3, 80),
   };
   if (typeof input.graduation !== 'boolean') fail(400, 'INVALID_INPUT', '毕业转让应为布尔值。');
-  value.graduation = input.graduation;
+  value.graduation = service ? false : input.graduation;
   if (!input.specs || typeof input.specs !== 'object' || Array.isArray(input.specs)) fail(400, 'INVALID_INPUT', '请填写商品参数。');
   const entries = Object.entries(input.specs);
   if (!entries.length || entries.length > 10) fail(400, 'INVALID_INPUT', '商品参数应为 1–10 项。');
   value.specs = Object.fromEntries(entries.flatMap(([key, item]) => {
     const name = text(key, '参数名', 1, 40);
+    if (service && ![...SERVICE_REQUIRED, ...SERVICE_OPTIONAL].includes(name)) fail(400, 'INVALID_INPUT', '服务包含不适用的参数。');
+    if (service && SERVICE_OPTIONAL.includes(name) && item === '') return [];
     if (value.category === 'daily' && name === '尺寸' && item === '') return [];
     return [[name, text(item, '参数内容', 1, 200)]];
   }));
-  const required = value.category === 'ebike' ? ['购入时间', '电池情况', '卖家自述续航'] : value.category === 'daily' ? ['数量', '使用情况'] : ['型号', '使用情况'];
+  const required = service ? SERVICE_REQUIRED : value.category === 'ebike' ? ['购入时间', '电池情况', '卖家自述续航'] : value.category === 'daily' ? ['数量', '使用情况'] : ['型号', '使用情况'];
   if (required.some(key => !Object.hasOwn(value.specs, key))) fail(400, 'INVALID_INPUT', '请填写该分类的完整商品参数。');
+  if (service) {
+    choice(value.specs['服务方向'], SERVICE_DIRECTIONS, '服务方向');
+    choice(value.specs['服务方式'], SERVICE_MODES, '服务方式');
+    choice(value.specs['计价单位'], SERVICE_UNITS, '计价单位');
+    if (value.specs['计价单位'] === '自定义') value.specs['自定义单位'] = text(value.specs['自定义单位'], '自定义单位', 1, 20);
+    else delete value.specs['自定义单位'];
+    if (value.specs['服务方式'] === '线下服务') delete value.specs['线上沟通方式'];
+  }
   if (!Array.isArray(input.imageIds) || input.imageIds.length < 1 || input.imageIds.length > 6 || new Set(input.imageIds).size !== input.imageIds.length) {
     fail(400, 'INVALID_INPUT', '请选择 1–6 张不同的商品照片。');
   }
@@ -289,11 +305,15 @@ async function listProducts(db, search, viewer) {
   const query = text(search.get('query') || '', '搜索词', 0, 100), sort = search.get('sort') || 'newest';
   choice(sort, ['newest', 'price-asc', 'price-desc'], '排序');
   const where = ["status = 'active'", 'sold_at IS NULL', 'deleted_at IS NULL'], values = [];
+  for (const [key, label, options] of [['serviceDirection', '服务方向', SERVICE_DIRECTIONS], ['serviceMode', '服务方式', SERVICE_MODES]]) {
+    const value = search.get(key);
+    if (value) { choice(value, options, label); where.push("category = 'service'", `json_extract(specs_json, '$.${label}') = ?`); values.push(value); }
+  }
   for (const [column, value] of [['category', category === 'all' ? '' : category], ['campus', campus], ['condition', condition]]) {
     if (value) { where.push(`${column} = ?`); values.push(value); }
   }
   if (query) {
-    where.push("instr(lower(title || ' ' || description || ' ' || CASE category WHEN 'appliance' THEN '小电器' WHEN 'ebike' THEN '电瓶车' ELSE '生活用品' END), lower(?)) > 0");
+    where.push("instr(lower(title || ' ' || description || ' ' || CASE category WHEN 'appliance' THEN '小电器' WHEN 'ebike' THEN '电瓶车' WHEN 'service' THEN '服务类 ' || specs_json ELSE '生活用品' END), lower(?)) > 0");
     values.push(query);
   }
   for (const [key, clause] of [['cheap', 'price_cents <= 10000'], ['fresh', "condition IN ('全新', '几乎全新')"], ['graduation', 'graduation = 1']]) {
@@ -304,7 +324,7 @@ async function listProducts(db, search, viewer) {
   const clause = where.join(' AND '), order = sort === 'price-asc' ? 'price_cents ASC' : sort === 'price-desc' ? 'price_cents DESC' : 'created_at DESC';
   const count = await first(db, `SELECT count(*) AS total, COALESCE(sum(CASE WHEN is_demo = 1 THEN 1 ELSE 0 END), 0) AS demo_total FROM products WHERE ${clause}`, values);
   const rows = await all(db, `SELECT * FROM products WHERE ${clause} ORDER BY ${order}, id DESC LIMIT ? OFFSET ?`, [...values, pageSize, (page - 1) * pageSize]);
-  const categoryCounts = { all: 0, appliance: 0, ebike: 0, daily: 0 };
+  const categoryCounts = { all: 0, appliance: 0, ebike: 0, daily: 0, service: 0 };
   for (const group of await all(db, "SELECT category, count(*) AS total FROM products WHERE status = 'active' AND sold_at IS NULL AND deleted_at IS NULL GROUP BY category")) {
     categoryCounts[group.category] = Number(group.total); categoryCounts.all += Number(group.total);
   }

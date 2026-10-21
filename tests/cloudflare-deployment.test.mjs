@@ -27,7 +27,7 @@ async function fixture(t) {
 
 test('schema snapshot exactly matches all migrations and contains only empty business tables', async () => {
   const actual = await readFile(join(ROOT, 'cloudflare/migrations/0001_schema.sql'), 'utf8');
-  assert.equal(actual.replace(/\r\n?/g, '\n'), await cloudflareSchema({ root: ROOT }));
+  assert.equal(actual.replace(/\r\n?/g, '\n'), await cloudflareSchema({ root: ROOT, maxMigration: 8 }));
   assert(!/^\s*(?:INSERT|UPDATE|DELETE)\s|demo_juzi_|juzi_demo_catalog/m.test(actual));
   const db = new DatabaseSync(':memory:');
   try {
@@ -61,8 +61,8 @@ test('schema generator checks immutable output without rewriting it', async () =
 });
 
 test('LF, CRLF and mixed migration checkouts produce the same schema without rewriting applied history', async t => {
-  const files = (await readdir(join(ROOT, 'drizzle'))).filter(file => /^\d+_[A-Za-z0-9_]+\.sql$/.test(file)).sort();
-  const expected = await cloudflareSchema({ root: ROOT });
+  const files = (await readdir(join(ROOT, 'drizzle'))).filter(file => /^\d+_[A-Za-z0-9_]+\.sql$/.test(file) && Number(file.split('_')[0]) <= 8).sort();
+  const expected = await cloudflareSchema({ root: ROOT, maxMigration: 8 });
   const appliedBefore = await readFile(join(ROOT, 'cloudflare/migrations/0001_schema.sql'));
   for (const style of ['lf', 'crlf', 'mixed']) {
     const root = await fixture(t);

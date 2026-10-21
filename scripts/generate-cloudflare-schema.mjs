@@ -13,10 +13,10 @@ const canonicalLf = sql => sql.replace(/\r\n?/g, '\n');
 const INITIAL_CANONICAL_SOURCE_SHA256 = '9325ed2bc852843a61862d795c24c70ae9bccdd1b5b727c43c95ea0ec9c278bd';
 const INITIAL_RECORDED_SOURCE_SHA256 = '8139501b2574811e407abfda82cd527370830517f7b5ff92a3dea76a907d3a2b';
 
-export async function cloudflareSchema({ root = ROOT } = {}) {
+export async function cloudflareSchema({ root = ROOT, maxMigration = Infinity } = {}) {
   const db = new DatabaseSync(':memory:');
   try {
-    const files = (await readdir(join(root, 'drizzle'))).filter(file => /^\d+_[A-Za-z0-9_]+\.sql$/.test(file)).sort();
+    const files = (await readdir(join(root, 'drizzle'))).filter(file => /^\d+_[A-Za-z0-9_]+\.sql$/.test(file) && Number(file.split('_')[0]) <= maxMigration).sort();
     if (!files.length) throw new Error('No source schema migrations found.');
     const digest = createHash('sha256');
     for (const file of files) {
@@ -47,12 +47,25 @@ export async function cloudflareSchema({ root = ROOT } = {}) {
 }
 
 export async function generateCloudflareSchema({ root = ROOT, check = false } = {}) {
-  const sql = await cloudflareSchema({ root }), target = join(root, 'cloudflare', 'migrations', '0001_schema.sql');
+  const folder = join(root, 'cloudflare', 'migrations');
+  let increments = [];
+  try { increments = (await readdir(folder)).filter(file => /^\d+_.*\.sql$/.test(file) && file !== '0001_schema.sql').sort(); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const sql = await cloudflareSchema({ root, maxMigration: increments.length ? 8 : Infinity }), target = join(folder, '0001_schema.sql');
   let existing;
   try { existing = await readFile(target, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (existing !== undefined && canonicalLf(existing) !== sql) throw new Error('Initial schema snapshot differs. Add a reviewed new migration after deployment; do not rewrite applied history.');
   if (check && existing === undefined) throw new Error('Cloudflare schema snapshot is missing.');
   if (!check && existing === undefined) { await mkdir(dirname(target), { recursive: true }); await writeFile(target, sql, 'utf8'); }
+  if (increments.length) {
+    const actual = new DatabaseSync(':memory:'), expected = new DatabaseSync(':memory:');
+    try {
+      actual.exec(existing || sql);
+      for (const file of increments) actual.exec(await readFile(join(folder, file), 'utf8'));
+      expected.exec(await cloudflareSchema({ root }));
+      const signature = db => db.prepare("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type, name").all().map(row => [row.type, row.name, row.sql.replace(/[\"`]/g, '').replace(/\bproducts\./g, '').replace(/\s+/g, ' ').trim().toLowerCase()]);
+      if (JSON.stringify(signature(actual)) !== JSON.stringify(signature(expected))) throw new Error('Incremental Cloudflare schema differs from source migrations.');
+    } finally { actual.close(); expected.close(); }
+  }
   return { path: target, tables: CLOUDFLARE_TABLES.length, schemaOnly: true, matches: true };
 }
 

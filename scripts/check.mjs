@@ -43,7 +43,7 @@ for(const name of migrations){
     const inserts=sql.split('--> statement-breakpoint').map(value=>value.trim()).filter(value=>/^INSERT\b/i.test(value));
     // Rebuilding products to update its CHECK constraint must copy existing rows;
     // only allow that data-preserving INSERT...SELECT, never seed new user/listing rows.
-    assert(inserts.every(statement=>/^INSERT INTO `__new_products`\([\s\S]*\) SELECT[\s\S]* FROM `products`;$/i.test(statement)),'Other migrations must not seed product or user records');
+    assert(inserts.every(statement=>name==='0009_service_listings.sql' && /^INSERT INTO `(private_contacts|product_media|favorites|conversations|messages)` SELECT \* FROM `__service_backup_\1`;$/i.test(statement) || /^INSERT INTO `__new_products`\([\s\S]*\) SELECT[\s\S]* FROM `products`;$/i.test(statement)),'Other migrations must not seed product or user records');
   }
 }
 console.log('PASS: server entry, D1/R2 bindings, database frontend, syntax, additive schema and explicitly requested demo catalog');
