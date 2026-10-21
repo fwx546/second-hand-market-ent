@@ -72,6 +72,7 @@ test('local preview opens a fictional demo chat without creating or sending real
   c.context.location.hash=`#${c.context.location.hash}`;
   await c.loadConversation(`preview_${sample.id}`);
   assert(c.messagesPage().includes('本地模拟对话'));
+  assert(c.messagesPage().includes('了解交换联系方式'));
   assert(c.messagesPage().includes('product-card-prompt'));
   await c.sendGreeting();
   assert.equal(c.state.messages.at(-1).body,'你好呀，商品还在吗？');
