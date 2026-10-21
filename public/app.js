@@ -8,7 +8,7 @@ const icon=name=>`<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="curr
 const money=value=>Number(value||0).toLocaleString('zh-CN',{maximumFractionDigits:2});
 const defaults=()=>({query:'',category:'all',campus:'',condition:'',serviceDirection:'',serviceMode:'',cheap:false,fresh:false,graduation:false,sort:'newest'});
 const state={contactExchange:null,exchangeError:'',conversations:[],activeConversation:null,messages:[],messageError:'',session:null,sessionError:'',filters:defaults(),home:{items:[],total:0,realTotal:0,demoTotal:0,counts:{},page:0,hasMore:false,loading:false,error:''},published:[],favorites:[],favoriteIds:new Set(),favoritesError:'',detail:null,draft:null,profileError:'',tab:'published',managementStatus:'all'};
-let exchangeVersion=0,exchangeSaving=false,settingsSaving=false,routeVersion=0,toastTimer,modalFocus,currentRoute='',homeRequest=0,modalVersion=0,submitting=false,uploading=false,signingOut=false,emailAttempt=0,loginTicker,messageTicker,identityVersion=0,profileSaving=false;
+let exchangeVersion=0,exchangeSaving=false,exchangeReadInFlight=false,settingsSaving=false,routeVersion=0,toastTimer,modalFocus,currentRoute='',homeRequest=0,modalVersion=0,submitting=false,uploading=false,signingOut=false,emailAttempt=0,loginTicker,messageTicker,identityVersion=0,profileSaving=false;
 const pendingFavorite=new Set(),statusBusy=new Set(),app=$('#app');
 function routeInfo(){const[path,search='']=(location.hash.slice(1)||'/').split('?');return{path,params:new URLSearchParams(search)};}
 function decodeId(value){try{return decodeURIComponent(value);}catch{return '';}}
@@ -179,11 +179,26 @@ function contactExchangePanel(){
   return `<section class="contact-exchange"><h2>联系方式由你决定</h2>${hint}${label?`<p>${label}</p>`:''}${cooldown?'<p class="exchange-hint">请尊重对方意愿，24 小时后可重新申请。</p>':`<button class="button secondary small" data-action="exchange-request" ${busy}>申请交换联系方式</button>`}${error}</section>`;
 }
 function renderContactExchangePanel(){const panel=$('#contact-exchange-panel');if(panel)panel.innerHTML=contactExchangePanel();}
+function safeContactExchange(result){
+  if(typeof result?.enabled!=='boolean')throw new Error('交换状态暂时无法确认。');
+  if(!result.enabled||!result.exchange)return {enabled:result.enabled,exchange:null};
+  const row=result.exchange;
+  if(!['pending','accepted','declined','cancelled','revoked','expired'].includes(row.status)||!['incoming','outgoing'].includes(row.direction)||typeof row.id!=='string')throw new Error('交换状态暂时无法确认。');
+  const exchange={id:row.id,status:row.status,direction:row.direction,offeredType:row.offeredType,createdAt:row.createdAt,updatedAt:row.updatedAt,expiresAt:row.expiresAt};
+  if(row.status==='accepted'){
+    const contacts={};
+    for(const key of ['mine','other']){const value=row.contacts?.[key];if(!value||!['wechat','phone','qq'].includes(value.type)||typeof value.value!=='string'||value.value.length<3||value.value.length>80)throw new Error('交换结果尚未确认，请刷新对话。');contacts[key]={type:value.type,value:value.value};}
+    exchange.contacts=contacts;
+  }
+  return {enabled:true,exchange};
+}
 async function refreshContactExchange(id){
-  if(exchangeSaving||!signedIn())return;
+  if(exchangeSaving||exchangeReadInFlight||!signedIn())return;
+  exchangeReadInFlight=true;
   const version=++exchangeVersion,identity=identitySnapshot();
-  try{const result=await api.contactExchange(id);if(version!==exchangeVersion||!sameIdentity(identity)||state.activeConversation?.id!==id)return;if(typeof result?.enabled!=='boolean')throw new Error('交换状态暂时无法确认。');state.contactExchange=result;state.exchangeError='';}
+  try{const result=await api.contactExchange(id);if(version!==exchangeVersion||!sameIdentity(identity)||state.activeConversation?.id!==id)return;state.contactExchange=safeContactExchange(result);state.exchangeError='';}
   catch(error){if(version!==exchangeVersion||!sameIdentity(identity)||state.activeConversation?.id!==id||authExpired(error))return;state.contactExchange=null;state.exchangeError='交换状态暂不可用，私信仍可正常使用。';}
+  finally{exchangeReadInFlight=false;}
   renderContactExchangePanel();
 }
 function openContactExchange(action){
@@ -202,13 +217,13 @@ async function submitContactExchange(form){
 async function updateContactExchange(action,requestId,extra={}){
   if(exchangeSaving||!signedIn()||!state.activeConversation)return;
   const id=state.activeConversation.id,identity=identitySnapshot(),version=modalVersion;
-  exchangeSaving=true;exchangeVersion++;renderContactExchangePanel();
+  exchangeSaving=true;exchangeVersion++;if(action==='revoke')state.contactExchange=null;renderContactExchangePanel();
   const form=$('#exchange-form');if(form)for(const control of form.elements)control.disabled=true;
-  try{const result=await api.exchangeContact(id,{action,...(action==='request'?{}:{requestId}),...extra});if(!sameIdentity(identity)||state.activeConversation?.id!==id)return;if(result?.enabled!==true||!result.exchange)throw new Error('交换结果尚未确认，请刷新对话。');state.contactExchange=result;state.exchangeError='';if(version===modalVersion)closeModal();}
+  try{const result=await api.exchangeContact(id,{action,...(action==='request'?{}:{requestId}),...extra});if(!sameIdentity(identity)||state.activeConversation?.id!==id)return;const checked=safeContactExchange(result);if(checked.enabled!==true||!checked.exchange)throw new Error('交换结果尚未确认，请刷新对话。');state.contactExchange=checked;state.exchangeError='';if(version===modalVersion)closeModal();}
   catch(error){if(!sameIdentity(identity)||state.activeConversation?.id!==id||authExpired(error))return;const feedback=$('#exchange-feedback');if(feedback&&version===modalVersion)feedback.textContent=message(error);else state.exchangeError=message(error);}
   finally{exchangeSaving=false;if(form?.isConnected)for(const control of form.elements)control.disabled=false;if(sameIdentity(identity)&&state.activeConversation?.id===id)renderContactExchangePanel();}
 }
-function confirmRevokeExchange(requestId){showModal(`<h2>停止本次联系方式共享？</h2><p>停止后双方将无法再从平台查看本次号码，但无法撤回对方已看到、截图或保存的信息。私信可以继续。</p><div class="modal-actions"><button class="button secondary" data-action="close-modal">保留共享</button><button class="button primary" data-action="exchange-confirm-revoke" data-request-id="${esc(requestId)}">停止共享</button></div>`,'停止联系方式共享');}
+function confirmRevokeExchange(requestId){showModal(`<h2>停止本次联系方式共享？</h2><p>停止后双方将无法再从平台查看本次号码，但无法撤回对方已看到、截图或保存的信息。私信可以继续。</p><p id="exchange-feedback" role="alert"></p><div class="modal-actions"><button class="button secondary" data-action="close-modal">保留共享</button><button class="button primary" data-action="exchange-confirm-revoke" data-request-id="${esc(requestId)}">停止共享</button></div>`,'停止联系方式共享');}
 
 function messagesPage(){
   const path=routeInfo().path,id=path.startsWith('/messages/')?decodeId(path.slice(10)):'';
