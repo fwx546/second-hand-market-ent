@@ -17,7 +17,7 @@ function client(session=guestSession(),api={}){
   const context={URL,URLSearchParams,FormData:TestFormData,console,api,categories:[],location,history:{replaceState(_a,_b,hash){location.hash=hash;}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},
     document:{querySelector:s=>elements[s]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(){},body:{classList:{add(){},remove(){}}}},
     window:{scrollTo(){},top:{location:{assign(path){navigation.push(path);}}},addEventListener(name,fn){events.set(name,fn);}}};
-  vm.runInNewContext(`${source}\nglobalThis.test={state,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,captureDraft,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,discardDraft,publish,saveDraft};`,context);
+  vm.runInNewContext(`${source}\nglobalThis.test={state,home,chips,normalizeFilters,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,captureDraft,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,discardDraft,publish,saveDraft};`,context);
   context.test.state.session=session;
   return{...context.test,context,elements,modalRoot,events,navigation};
 }
@@ -294,6 +294,25 @@ test('QQ contact editor and contact modal include bounded value and meetup conte
   const form=c.publish();assert(form.includes('value="qq" selected'));assert.match(form,/<input id="field-contactValue"[^>]*maxlength="80"/);assert(form.includes('QQ 号'));
   c.state.detail={id:'goods',campus:'太仓校区',location:'图书馆正门',seller:'橘子同学'};await c.contact('goods');
   assert(c.modalRoot.innerHTML.includes('QQ 号'));assert(c.modalRoot.innerHTML.includes('123456789'));assert(c.modalRoot.innerHTML.includes('太仓校区'));assert(c.modalRoot.innerHTML.includes('图书馆正门'));
+});
+
+test('online service contact modal explains service arrangements instead of physical meetup',async()=>{
+  const c=client(schoolSession(),{contact:async()=>({type:'wechat',value:'test_contact'})});
+  c.state.detail={id:'service',category:'service',campus:'SIP 校区',location:'线上服务',seller:'测试服务者',specs:{服务方式:'线上服务'}};
+  await c.contact('service');
+  assert(c.modalRoot.innerHTML.includes('和服务者聊聊你的需求'));
+  assert(c.modalRoot.innerHTML.includes('服务方式／地点'));assert(!c.modalRoot.innerHTML.includes('面交地点'));
+  assert(!c.modalRoot.innerHTML.includes('现场确认商品情况'));
+});
+
+test('switching to service filters removes physical filters and exposes matching service options',()=>{
+  const c=client(schoolSession());
+  Object.assign(c.state.filters,{category:'service',condition:'全新',fresh:true,graduation:true});c.normalizeFilters();
+  assert.equal(c.state.filters.condition,'');assert.equal(c.state.filters.fresh,false);assert.equal(c.state.filters.graduation,false);
+  let html=c.home();assert(html.includes('service-direction-filter'));assert(html.includes('service-mode-filter'));
+  assert(!html.includes('id="condition-filter"'));assert(!c.chips().includes('毕业转让'));assert(html.includes('按标价排序'));
+  Object.assign(c.state.filters,{category:'daily',serviceDirection:'学习辅导',serviceMode:'线上服务'});c.normalizeFilters();
+  assert.equal(c.state.filters.serviceDirection,'');assert.equal(c.state.filters.serviceMode,'');assert(c.home().includes('id="condition-filter"'));
 });
 
 test('network timeout and caller cancellation abort requests without pretending a successful write',async t=>{
