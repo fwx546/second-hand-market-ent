@@ -149,7 +149,7 @@ test('server-side form validation and parameterized search', async t => {
     { title: '' }, { title: 'x'.repeat(101) }, { description: '短' }, { campus: '其他学校' }, { category: 'all' },
     { condition: '随便' }, { price: 0 }, { price: 0.001 }, { price: '1' }, { price: 100000.01 }, { originalPrice: -1 },
     { graduation: 'true' }, { specs: {} }, { specs: { 型号: '型号' } }, { seller: '' }, { seller: 'x'.repeat(31) },
-    { contactType: 'email' }, { contactValue: '' }, { imageIds: [] }, { imageIds: [image.data.mediaId, image.data.mediaId] },
+    { contactType: 'email' }, { contactValue: 'x' }, { imageIds: [] }, { imageIds: [image.data.mediaId, image.data.mediaId] },
     { imageIds: Array(7).fill(image.data.mediaId) }, { ownerId: B.userId }, { mine: true }, { role: 'admin' }, { createdAt: 1 },
   ];
   for (const extra of invalid) {
@@ -168,6 +168,17 @@ test('server-side form validation and parameterized search', async t => {
   assert.equal((await api(env, `/api/products/${created.data.product.id}`, { method: 'PATCH', viewer: A, body: { status: 'archived' } })).status, 400);
   assert.equal((await api(env, '/api/products', { method: 'POST', viewer: A, body: '{broken' })).status, 400);
   assert.equal((await api(env, '/api/products', { method: 'POST', viewer: A, body: { ...input, description: 'x'.repeat(70000) } })).status, 413);
+});
+
+test('publishing and private chat do not require a phone, WeChat or QQ value', async t => {
+  const env=fixture(t),photo=await upload(env,A),input=productInput([photo.data.mediaId]);
+  delete input.contactType;delete input.contactValue;
+  const created=await api(env,'/api/products',{method:'POST',viewer:A,body:input});assert.equal(created.status,201);
+  const id=created.data.product.id;assert.equal(env.DB.sqlite.prepare('SELECT count(*) AS n FROM private_contacts WHERE product_id=?').get(id).n,0);
+  const convo=await api(env,'/api/conversations',{method:'POST',viewer:B,body:{productId:id}});assert.equal(convo.status,200);
+  const message=await api(env,`/api/conversations/${convo.data.conversationId}/messages`,{method:'POST',viewer:B,body:{body:'你好，可以先在这里沟通吗？'}});assert.equal(message.status,201);
+  assert.equal((await api(env,`/api/products/${id}/contact`,{viewer:B})).status,403);
+  assert.equal((await api(env,`/api/products/${id}/contact`,{viewer:A})).data.value,'');
 });
 
 test('daily goods can be published and edited without a size', async t => {

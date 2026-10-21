@@ -115,9 +115,10 @@ function validateProduct(input) {
     location: service && input.specs?.['服务方式'] === '线上服务' ? '线上服务' : text(input.location, service ? '服务地点' : '面交地点', 1, 100),
     description: text(input.description, '商品描述', 5, 2000, true),
     seller: text(input.seller, '卖家昵称', 1, 30),
-    contactType: choice(input.contactType, CONTACT_TYPES, '联系方式类型'),
-    contactValue: text(input.contactValue, '联系方式', 3, 80),
+    contactType: choice(input.contactType ?? 'wechat', CONTACT_TYPES, '联系方式类型'),
+    contactValue: text(input.contactValue ?? '', '联系方式', 0, 80),
   };
+  if (value.contactValue && value.contactValue.length < 3) fail(400, 'INVALID_INPUT', '联系方式至少 3 个字符，或留空使用私信。');
   if (typeof input.graduation !== 'boolean') fail(400, 'INVALID_INPUT', '毕业转让应为布尔值。');
   value.graduation = service ? false : input.graduation;
   if (!input.specs || typeof input.specs !== 'object' || Array.isArray(input.specs)) fail(400, 'INVALID_INPUT', '请填写商品参数。');
@@ -355,6 +356,7 @@ function imageStatements(db, productId, imageIds, status) {
 }
 function contactStatement(db, productId, value, status) {
   const guard = productGuard(productId, status);
+  if (!value.contactValue) return statement(db, `DELETE FROM private_contacts WHERE product_id = ? AND ${guard.sql}`, [productId, ...guard.values]);
   return statement(db, `INSERT INTO private_contacts (product_id, type, value) SELECT ?, ?, ? WHERE ${guard.sql} ON CONFLICT(product_id) DO UPDATE SET type = excluded.type, value = excluded.value`, [productId, value.contactType, value.contactValue, ...guard.values]);
 }
 async function assertActiveQuota(db, userId) {
@@ -553,8 +555,7 @@ export async function handleMarket(request, env, viewer = null, { development = 
         if (row.is_demo) fail(409, 'DEMO_PRODUCT', '这是虚构的示例商品，没有真实卖家或联系方式。');
         if (row.owner_id !== viewer.userId) fail(403, 'CONTACT_CONSENT_REQUIRED', '联系方式不直接公开，请先通过站内私信沟通。');
         const contact = await first(db, 'SELECT type, value FROM private_contacts WHERE product_id = ?', [productId]);
-        if (!contact) fail(404, 'NOT_FOUND', '卖家联系方式暂不可用。');
-        return json(contact);
+        return json(contact || { type: 'wechat', value: '' });
       }
       if (!match[2] && method === 'GET') {
         const row = await productRow(db, productId);
