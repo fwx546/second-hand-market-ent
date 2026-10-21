@@ -16,7 +16,7 @@ function client(session=guest,api={}){
   const elements={'#app':{innerHTML:''},'#modal-root':modal,'.modal':{focus(){}},'#toast':toast};
   const context={URL,URLSearchParams,FormData,api,categories,location:{origin:'https://campus.test',hash:'#/'},history:{replaceState(){}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},
     document:{querySelector:s=>elements[s]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(){},body:{classList:{add(){},remove(){}}}},window:{addEventListener(){},scrollTo(){}}};
-  vm.runInNewContext(`${source}\nglobalThis.test={state,home,loadHome,card,detail,profile,contact,favorite,imageUrl,productImage,demoImages};`,context);
+  vm.runInNewContext(`${source}\nglobalThis.test={state,home,loadHome,card,detail,profile,contact,favorite,imageUrl,productImage,demoImages,loadConversations,loadConversation,messagesPage,sendGreeting,sendProductCard};`,context);
   context.test.state.session=session;
   return{...context.test,context,elements,modal,toast};
 }
@@ -58,6 +58,29 @@ test('known examples bypass login prompts and never request contact data',async(
   }
   let contactCalls=0;const unknown=client(member,{startConversation:async()=>{throw new Error('不可交易');},contact:async()=>{contactCalls++;}});
   await unknown.contact(sample.id);assert.equal(contactCalls,0);assert.equal(unknown.modal.innerHTML,'');assert(unknown.toast.textContent.includes('不可交易'));
+});
+
+test('local preview opens a fictional demo chat without creating or sending real conversations',async()=>{
+  const preview={...guest,development:true};let realCalls=0;
+  const c=client(preview,{product:async()=>({product:sample}),conversations:async()=>{realCalls++;throw new Error('real inbox called');},startConversation:async()=>{realCalls++;throw new Error('real conversation called');},sendMessage:async()=>{realCalls++;throw new Error('real message called');}});
+  c.state.detail=sample;
+  const html=c.detail(sample);
+  assert(html.includes('模拟发消息'));
+  assert(!html.includes('data-action="contact" data-id="'+sample.id+'" disabled'));
+  await c.contact(sample.id);
+  assert.equal(c.context.location.hash,`/messages/preview_${sample.id}?from=product`);
+  c.context.location.hash=`#${c.context.location.hash}`;
+  await c.loadConversation(`preview_${sample.id}`);
+  assert(c.messagesPage().includes('本地模拟对话'));
+  assert(c.messagesPage().includes('product-card-prompt'));
+  await c.sendGreeting();
+  assert.equal(c.state.messages.at(-1).body,'你好呀，商品还在吗？');
+  await c.sendProductCard();
+  assert.equal(c.state.messages.at(-1).kind,'product_card');
+  c.context.location.hash='#/messages';
+  await c.loadConversations();
+  assert(c.messagesPage().includes('示例小风扇'));
+  assert.equal(realCalls,0);
 });
 
 test('real listings retain school-login contact behavior',async()=>{
