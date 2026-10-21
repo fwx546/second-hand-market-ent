@@ -248,6 +248,9 @@ test('daily goods size has no required marker and is omitted when empty',()=>{
   assert.deepEqual(Object.keys(c.validateDraft().specs),['数量','使用情况']);
   draft.specs.daily.尺寸='小号';
   assert.equal(c.validateDraft().specs.尺寸,'小号');
+  draft.fields.contactValue='legacy_private_number';
+  const payload=c.validateDraft();assert(!Object.hasOwn(payload,'contactValue'));assert(!Object.hasOwn(payload,'contactType'));
+  const form=c.publish();assert(!form.includes('id="field-contactValue"'));assert(!form.includes('legacy_private_number'));assert(form.includes('无需填写微信'));
 });
 
 test('401 discards private caches but preserves account-bound draft for same-account reauthentication',async()=>{
