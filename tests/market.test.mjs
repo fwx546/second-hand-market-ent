@@ -69,7 +69,8 @@ test('public DTO excludes all private data; authenticated contact is a separate 
     for (const forbidden of ['contactValue', 'contactType', 'ownerId', 'owner_id', 'juzi_test_contact', A.userId, B.userId, 'email']) assert(!serialized.includes(forbidden), forbidden);
     assert.equal(result.response.headers.get('cache-control'), 'no-store');
   }
-  const contact = await api(env, `/api/products/${productId}/contact`, { viewer: B });
+  assert.equal((await api(env, `/api/products/${productId}/contact`, { viewer: B })).status, 403);
+  const contact = await api(env, `/api/products/${productId}/contact`, { viewer: A });
   assert.deepEqual(contact.data, { type: 'wechat', value: 'juzi_test_contact' });
   assert.equal(contact.response.headers.get('cache-control'), 'no-store');
   assert.equal((await api(env, `/api/products/${productId}`, { viewer: A })).data.product.mine, true);
@@ -87,7 +88,7 @@ test('ownership enforced for edits, status changes and image references', async 
   assert.equal(updated.status, 200);
   assert.equal(updated.data.product.price, 45);
   assert.equal(updated.data.product.seller, '新的公开昵称');
-  assert.equal((await api(env, `/api/products/${product.id}/contact`, { viewer: B })).data.value, 'new_contact');
+  assert.equal((await api(env, `/api/products/${product.id}/contact`, { viewer: A })).data.value, 'new_contact');
   for (const forbidden of ['ownerId', 'mine', 'role', 'createdAt']) {
     assert.equal((await api(env, `/api/products/${product.id}`, { method: 'PATCH', viewer: A, body: { [forbidden]: 'forged' } })).status, 400);
   }
@@ -235,7 +236,7 @@ test('data survives separate database connection and handler lifecycle', async t
   try {
     assert.equal((await api(reopened, '/api/products')).data.total, 1);
     assert.equal((await api(reopened, '/api/me/favorites', { viewer: B })).data.items[0].id, productId);
-    assert.equal((await api(reopened, `/api/products/${productId}/contact`, { viewer: B })).data.value, 'juzi_test_contact');
+    assert.equal((await api(reopened, `/api/products/${productId}/contact`, { viewer: A })).data.value, 'juzi_test_contact');
     assert.equal((await api(reopened, created.data.product.images[0])).status, 200);
   } finally { reopened.DB.close(); }
 });

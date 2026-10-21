@@ -56,7 +56,7 @@ test('known examples bypass login prompts and never request contact data',async(
     c.state.detail=sample;await c.contact(sample.id);
     assert.equal(calls,0);assert.equal(c.modal.innerHTML,'');assert(c.toast.textContent.includes('不可交易'));
   }
-  let contactCalls=0;const unknown=client(member,{product:async()=>({product:sample}),contact:async()=>{contactCalls++;}});
+  let contactCalls=0;const unknown=client(member,{startConversation:async()=>{throw new Error('不可交易');},contact:async()=>{contactCalls++;}});
   await unknown.contact(sample.id);assert.equal(contactCalls,0);assert.equal(unknown.modal.innerHTML,'');assert(unknown.toast.textContent.includes('不可交易'));
 });
 
@@ -64,8 +64,8 @@ test('real listings retain school-login contact behavior',async()=>{
   const real={...sample,isDemo:false,images:['/api/media/user-photo']};
   let reads=0;const visitor=client(guest,{contact:async()=>{reads++;}});visitor.state.detail=real;await visitor.contact(real.id);
   assert.equal(reads,0);assert(visitor.modal.innerHTML.includes('学校邮箱'));
-  const owner=client(member,{contact:async()=>{reads++;return{type:'wechat',value:'fixture_contact'};}});owner.state.detail=real;await owner.contact(real.id);
-  assert.equal(reads,1);assert(owner.modal.innerHTML.includes('fixture_contact'));
+  const owner=client(member,{startConversation:async()=>{reads++;return{conversationId:'conversation_fixture'};},contact:async()=>{throw new Error('Private endpoint must not be read');}});owner.state.detail=real;await owner.contact(real.id);
+  assert.equal(reads,1);assert.equal(owner.context.location.hash,'/messages/conversation_fixture');assert(!owner.modal.innerHTML.includes('fixture_contact'));
 });
 
 test('filtered catalog counts come from the server through initial load and pagination',async()=>{

@@ -296,7 +296,8 @@ test('school sessions retain ownership isolation, private contacts and verified-
   assert.equal(created.data.product.sellerEmailVerified, true);
   const productPath = `/api/products/${created.data.product.id}`;
   assert.equal((await api(state.env, `${productPath}/contact`)).status, 401);
-  assert.equal((await api(state.env, `${productPath}/contact`, { viewer: userB })).status, 200);
+  assert.equal((await api(state.env, `${productPath}/contact`, { viewer: userB })).status, 403);
+  assert.equal((await api(state.env, `${productPath}/contact`, { viewer: userA })).status, 200);
   assert.equal((await api(state.env, productPath, { method: 'PATCH', viewer: userB, body: { price: 1 } })).status, 403);
   const publicResult = await api(state.env, productPath);
   assert.equal(publicResult.data.product.sellerEmailVerified, true);

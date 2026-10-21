@@ -551,6 +551,7 @@ export async function handleMarket(request, env, viewer = null, { development = 
         const row = await productRow(db, productId);
         if (!visible(row, viewer)) fail(404, 'NOT_FOUND', '商品不存在或已下架。');
         if (row.is_demo) fail(409, 'DEMO_PRODUCT', '这是虚构的示例商品，没有真实卖家或联系方式。');
+        if (row.owner_id !== viewer.userId) fail(403, 'CONTACT_CONSENT_REQUIRED', '联系方式不直接公开，请先通过站内私信沟通。');
         const contact = await first(db, 'SELECT type, value FROM private_contacts WHERE product_id = ?', [productId]);
         if (!contact) fail(404, 'NOT_FOUND', '卖家联系方式暂不可用。');
         return json(contact);

@@ -63,7 +63,7 @@ test('publishing explains service availability while the production schema is st
 test('service detail and cards replace physical labels and show units; management pauses bookings',()=>{
   const c=client(schoolSession()),p={id:'service1',category:'service',title:'Python 辅导',price:10,originalPrice:100,condition:'不适用',campus:'SIP 校区',location:'线上服务',description:'Python 基础辅导服务',status:'active',seller:'测试同学',images:[],specs:{服务方向:'学习辅导',计价单位:'每小时',服务方式:'线上服务',服务范围:'基础知识','服务时长／交付周期':'60分钟',预约安排:'提前一天'}};
   const detail=c.detail(p),card=c.card(p,{manage:true});
-  for(const text of ['关于这项服务','线上服务','学习辅导','／小时','联系服务者'])assert(detail.includes(text),text);
+  for(const text of ['关于这项服务','线上服务','学习辅导','／小时','发消息'])assert(detail.includes(text),text);
   for(const text of ['线下面交','不适用','购入价','关于这件好物'])assert(!detail.includes(text),text);
   assert(card.includes('暂停接单'));assert(!card.includes('标记售出'));assert(!card.includes('不适用'));
   p.status='inactive';assert(c.card(p,{manage:true}).includes('恢复接单'));
@@ -294,22 +294,6 @@ test('management shows distinct sold/deleted states and uses DELETE then inactiv
   p.status='deleted';const deleted=c.card(p,{manage:true});assert(deleted.includes('已删除'));assert(deleted.includes('恢复到已下架'));assert(!deleted.includes('标记售出'));assert(!deleted.includes('编辑</a>'));
   await c.changeStatus('goods','inactive');assert.equal(calls[1][2],'inactive');p.status='sold';assert(c.card(p,{manage:true}).includes('已售出'));
   c.state.managementStatus='sold';const html=c.profile();assert(html.includes('发布状态'));assert(html.includes('已售出'));assert(!html.includes('恢复到已下架'));
-});
-
-test('QQ contact editor and contact modal include bounded value and meetup context',async()=>{
-  const c=client(schoolSession(),{contact:async()=>({type:'qq',value:'123456789'})});c.state.draft=c.newDraft();c.state.draft.fields.contactType='qq';
-  const form=c.publish();assert(form.includes('value="qq" selected'));assert.match(form,/<input id="field-contactValue"[^>]*maxlength="80"/);assert(form.includes('QQ 号'));
-  c.state.detail={id:'goods',campus:'太仓校区',location:'图书馆正门',seller:'橘子同学'};await c.contact('goods');
-  assert(c.modalRoot.innerHTML.includes('QQ 号'));assert(c.modalRoot.innerHTML.includes('123456789'));assert(c.modalRoot.innerHTML.includes('太仓校区'));assert(c.modalRoot.innerHTML.includes('图书馆正门'));
-});
-
-test('online service contact modal explains service arrangements instead of physical meetup',async()=>{
-  const c=client(schoolSession(),{contact:async()=>({type:'wechat',value:'test_contact'})});
-  c.state.detail={id:'service',category:'service',campus:'SIP 校区',location:'线上服务',seller:'测试服务者',specs:{服务方式:'线上服务'}};
-  await c.contact('service');
-  assert(c.modalRoot.innerHTML.includes('和服务者聊聊你的需求'));
-  assert(c.modalRoot.innerHTML.includes('服务方式／地点'));assert(!c.modalRoot.innerHTML.includes('面交地点'));
-  assert(!c.modalRoot.innerHTML.includes('现场确认商品情况'));
 });
 
 test('switching to service filters removes physical filters and exposes matching service options',()=>{
