@@ -178,7 +178,16 @@ function contactExchangePanel(){
   const cooldown=exchange&&['declined','revoked'].includes(exchange.status)&&exchange.updatedAt+86400000>Date.now();
   return `<section class="contact-exchange"><h2>联系方式由你决定</h2>${hint}${label?`<p>${label}</p>`:''}${cooldown?'<p class="exchange-hint">请尊重对方意愿，24 小时后可重新申请。</p>':`<button class="button secondary small" data-action="exchange-request" ${busy}>申请交换联系方式</button>`}${error}</section>`;
 }
-function renderContactExchangePanel(){const panel=$('#contact-exchange-panel');if(panel)panel.innerHTML=contactExchangePanel();}
+const exchangePanelMarkup=new WeakMap();
+function renderContactExchangePanel(){
+  const panel=$('#contact-exchange-panel');if(!panel)return;
+  const markup=contactExchangePanel();if(exchangePanelMarkup.get(panel)===markup)return;
+  const focused=panel.contains?.(document.activeElement)?document.activeElement:null,returnTarget=modalFocus&&panel.contains?.(modalFocus)?modalFocus:null;
+  panel.innerHTML=markup;exchangePanelMarkup.set(panel,markup);
+  const replacement=old=>[...panel.querySelectorAll('button')].find(button=>!button.disabled&&button.dataset.action===old.dataset?.action&&button.dataset.requestId===old.dataset?.requestId)||panel;
+  if(returnTarget){modalFocus=replacement(returnTarget);if(modalFocus===panel)panel.tabIndex=-1;}
+  if(focused){const next=replacement(focused);if(next===panel)panel.tabIndex=-1;next.focus();}
+}
 function safeContactExchange(result){
   if(typeof result?.enabled!=='boolean')throw new Error('交换状态暂时无法确认。');
   if(!result.enabled||!result.exchange)return {enabled:result.enabled,exchange:null};
@@ -219,7 +228,7 @@ async function updateContactExchange(action,requestId,extra={}){
   const id=state.activeConversation.id,identity=identitySnapshot(),version=modalVersion;
   exchangeSaving=true;exchangeVersion++;if(action==='revoke')state.contactExchange=null;renderContactExchangePanel();
   const form=$('#exchange-form');if(form)for(const control of form.elements)control.disabled=true;
-  try{const result=await api.exchangeContact(id,{action,...(action==='request'?{}:{requestId}),...extra});if(!sameIdentity(identity)||state.activeConversation?.id!==id)return;const checked=safeContactExchange(result);if(checked.enabled!==true||!checked.exchange)throw new Error('交换结果尚未确认，请刷新对话。');state.contactExchange=checked;state.exchangeError='';if(version===modalVersion)closeModal();}
+  try{const result=await api.exchangeContact(id,{action,...(action==='request'?{}:{requestId}),...extra});if(!sameIdentity(identity)||state.activeConversation?.id!==id)return;const checked=safeContactExchange(result);if(checked.enabled!==true||!checked.exchange)throw new Error('交换结果尚未确认，请刷新对话。');state.contactExchange=checked;state.exchangeError='';renderContactExchangePanel();if(version===modalVersion)closeModal();}
   catch(error){if(!sameIdentity(identity)||state.activeConversation?.id!==id||authExpired(error))return;const feedback=$('#exchange-feedback');if(feedback&&version===modalVersion)feedback.textContent=message(error);else state.exchangeError=message(error);}
   finally{exchangeSaving=false;if(form?.isConnected)for(const control of form.elements)control.disabled=false;if(sameIdentity(identity)&&state.activeConversation?.id===id)renderContactExchangePanel();}
 }
