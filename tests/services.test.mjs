@@ -40,6 +40,9 @@ test('services reject incomplete/physical specs and require location or custom u
 test('transactional D1 migration preserves existing listings, private contacts, images, favorites and messages', async t => {
   const env = fixture(t, { migrate: false }), db = env.DB.sqlite;
   db.exec(readFileSync(new URL('../cloudflare/migrations/0001_schema.sql', import.meta.url), 'utf8'));
+  assert.equal((await api(env, '/api/me')).data.capabilities.servicePublishingReady, false);
+  const pending = await create(env);
+  assert.equal(pending.status, 503); assert.equal(pending.data.error.code, 'SERVICE_SCHEMA_PENDING');
   const photo = await upload(env);
   const result = await api(env, '/api/products', { method: 'POST', viewer: A, body: productInput([photo.data.mediaId]) });
   const id = result.data.product.id;
@@ -53,5 +56,6 @@ test('transactional D1 migration preserves existing listings, private contacts, 
   try { db.exec(readFileSync(new URL('../cloudflare/migrations/0002_service_listings.sql', import.meta.url), 'utf8')); db.exec('COMMIT'); }
   catch (error) { db.exec('ROLLBACK'); throw error; }
   assert.deepEqual(rows(), before); assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+  assert.equal((await api(env, '/api/me')).data.capabilities.servicePublishingReady, true);
   assert.equal((await create(env)).status, 201);
 });

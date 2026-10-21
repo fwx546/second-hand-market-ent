@@ -21,6 +21,13 @@ function fail(status, code, message) { throw new MarketError(status, code, messa
 function json(value, status = 200, headers = {}) { return Response.json(value, { status, headers: { ...PRIVATE_HEADERS, ...headers } }); }
 function statement(db, sql, values = []) { return db.prepare(sql).bind(...values); }
 async function first(db, sql, values = []) { return statement(db, sql, values).first(); }
+async function serviceSchemaReady(db) {
+  const row = await first(db, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'products'");
+  return Boolean(row?.sql?.includes("'service'") && row.sql.includes("'不适用'"));
+}
+async function requireServiceSchema(db, category) {
+  if (category === 'service' && !await serviceSchemaReady(db)) fail(503, 'SERVICE_SCHEMA_PENDING', '服务发布暂未开通，请稍后再试。');
+}
 async function all(db, sql, values = []) { return (await statement(db, sql, values).all()).results || []; }
 function requireDb(env) {
   if (!env?.DB) fail(503, 'SERVICE_UNAVAILABLE', '数据库暂不可用，请稍后重试。');
@@ -367,6 +374,7 @@ async function createProduct(request, db, viewer) {
   const userId = requireViewer(viewer), body = await payload(request);
   checkFields(body);
   const value = validateProduct(body);
+  await requireServiceSchema(db, value.category);
   await assertCreateQuota(db, userId);
   await assertImagesOwned(db, value.imageIds, userId);
   await ensureUser(db, userId);
@@ -407,6 +415,7 @@ async function updateProduct(request, db, productId, viewer) {
       specs: JSON.parse(existing.specs_json), graduation: Boolean(existing.graduation), seller: existing.seller,
       contactType: contact?.type, contactValue: contact?.value, imageIds: await mediaIds(db, productId), ...body,
     });
+    await requireServiceSchema(db, value.category);
     await assertImagesOwned(db, value.imageIds, userId);
     const guard = productGuard(productId, status);
     const results = await db.batch([
@@ -499,7 +508,7 @@ export async function handleMarket(request, env, viewer = null, { development = 
           email: { configured: false, domain: 'student.xjtlu.edu.cn', sendUrl: '/api/auth/email/send', verifyUrl: '/api/auth/email/verify' },
           guest: { enabled: true, startUrl: '/api/auth/guest' },
         },
-        capabilities: { canPublish: Boolean(viewer), canViewContact: Boolean(viewer), canFavorite: Boolean(viewer), schoolVerificationRequired: false },
+        capabilities: { canPublish: Boolean(viewer), canViewContact: Boolean(viewer), canFavorite: Boolean(viewer), schoolVerificationRequired: false, servicePublishingReady: await serviceSchemaReady(db) },
       });
     }
     if (path === '/api/me' && method === 'PATCH') return await updateProfile(request, db, viewer);

@@ -53,6 +53,13 @@ test('service publishing uses service fields and conditional location/custom pri
   html=c.publish(); assert(html.includes('服务地点')); assert(html.includes('自定义单位')); assert(!html.includes('线上沟通方式'));
 });
 
+test('publishing explains service availability while the production schema is still old',()=>{
+  const session=schoolSession();session.capabilities={servicePublishingReady:false};
+  const c=client(session);c.context.categories.push({id:'service',name:'服务类'},{id:'daily',name:'生活用品'});c.state.draft=c.newDraft();
+  const html=c.publish();assert.match(html,/<option value="service"[^>]*disabled/);
+  assert(html.includes('服务发布暂未开通'));assert(!/<option value="daily"[^>]*disabled/.test(html));
+});
+
 test('service detail and cards replace physical labels and show units; management pauses bookings',()=>{
   const c=client(schoolSession()),p={id:'service1',category:'service',title:'Python 辅导',price:10,originalPrice:100,condition:'不适用',campus:'SIP 校区',location:'线上服务',description:'Python 基础辅导服务',status:'active',seller:'测试同学',images:[],specs:{服务方向:'学习辅导',计价单位:'每小时',服务方式:'线上服务',服务范围:'基础知识','服务时长／交付周期':'60分钟',预约安排:'提前一天'}};
   const detail=c.detail(p),card=c.card(p,{manage:true});
