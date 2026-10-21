@@ -17,12 +17,41 @@ function client(session=guestSession(),api={}){
   const context={URL,URLSearchParams,FormData:TestFormData,console,api,categories:[],location,history:{replaceState(_a,_b,hash){location.hash=hash;}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},
     document:{querySelector:s=>elements[s]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(){},body:{classList:{add(){},remove(){}}}},
     window:{scrollTo(){},top:{location:{assign(path){navigation.push(path);}}},addEventListener(name,fn){events.set(name,fn);}}};
-  vm.runInNewContext(`${source}\nglobalThis.test={state,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,discardDraft,publish,saveDraft};`,context);
+  vm.runInNewContext(`${source}\nglobalThis.test={state,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,captureDraft,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,discardDraft,publish,saveDraft};`,context);
   context.test.state.session=session;
   return{...context.test,context,elements,modalRoot,events,navigation};
 }
 
 function preparedChallenge(c){Object.assign(c.state.emailLogin,{email:'example.student23@student.xjtlu.edu.cn',challengeEmail:'example.student23@student.xjtlu.edu.cn',challengeId:'challenge-test',code:'123456',expiresAt:Date.now()+600000});}
+
+test('category switching retains separate drafts and submits only service parameters',()=>{
+  const c=client(schoolSession());
+  c.state.draft=c.newDraft({category:'daily',title:'原标题',location:'图书馆',specs:{数量:'一个',使用情况:'正常'}});
+  const form={_values:[['category','service'],['title','课程辅导'],['spec-0','小号'],['spec-1','一个'],['spec-2','正常']]};
+  c.elements['#publish-form']=form;c.captureDraft();
+  assert.equal(c.state.draft.fields.category,'service');assert.equal(c.state.draft.specs.daily['数量'],'一个');
+  assert.equal(c.state.draft.specs.service['服务方式'],'线上服务');
+  form._values=[['category','daily'],['title','服务标题'],['spec-0','学习辅导'],['spec-1','每小时'],['spec-2','线上服务'],['spec-3','基础讲解'],['spec-4','每次60分钟'],['spec-5','提前一天']];
+  c.captureDraft();assert.equal(c.state.draft.fields.title,'课程辅导');
+  form._values=[['category','service']];c.captureDraft();assert.equal(c.state.draft.fields.title,'服务标题');
+  Object.assign(c.state.draft.fields,{description:'服务内容完整介绍',seller:'测试同学',contactValue:'test_contact',price:'10'});
+  c.state.draft.images=[{mediaId:'m1'}];form._values=[['category','service']];form.reportValidity=()=>true;
+  const payload=c.validateDraft();
+  assert.equal(payload.location,'线上服务');assert.equal(payload.condition,'不适用');assert.equal(payload.originalPrice,0);assert.equal(payload.graduation,false);
+  assert(!Object.hasOwn(payload.specs,'数量'));assert(!Object.hasOwn(payload.specs,'自定义单位'));
+});
+
+test('service publishing uses service fields and conditional location/custom pricing',()=>{
+  const c=client(schoolSession());
+  const specs={服务方向:'学习辅导',计价单位:'每小时',服务方式:'线上服务',服务范围:'Python 基础讲解','服务时长／交付周期':'每次60分钟',预约安排:'提前一天'};
+  c.state.draft=c.newDraft({category:'service',specs});
+  let html=c.publish();
+  assert(html.includes('服务标题')); assert(html.includes('服务介绍')); assert(html.includes('作品示例'));
+  assert(!html.includes('field-condition')); assert(!html.includes('field-originalPrice')); assert(!html.includes('field-location')); assert(!html.includes('name="graduation"'));
+  c.state.draft.specs.service['服务方式']='线下服务';
+  c.state.draft.specs.service['计价单位']='自定义';
+  html=c.publish(); assert(html.includes('服务地点')); assert(html.includes('自定义单位')); assert(!html.includes('线上沟通方式'));
+});
 
 test('only school-email verification establishes business identity, including in development',()=>{
   assert(client(schoolSession()).signedIn());
@@ -263,3 +292,5 @@ test('network timeout and caller cancellation abort requests without pretending 
   await assert.rejects(()=>request('/api/products',{method:'POST',body:{},timeoutMs:5}),error=>error.code==='REQUEST_TIMEOUT'&&error.status===0);
   const controller=new AbortController(),pending=request('/api/me',{signal:controller.signal,timeoutMs:1000});controller.abort();await assert.rejects(()=>pending,error=>error.name==='AbortError');
 });
+
+
