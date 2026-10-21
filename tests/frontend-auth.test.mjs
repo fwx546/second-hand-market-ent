@@ -17,12 +17,24 @@ function client(session=guestSession(),api={}){
   const context={URL,URLSearchParams,FormData:TestFormData,console,api,categories:[],location,history:{replaceState(_a,_b,hash){location.hash=hash;}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},
     document:{querySelector:s=>elements[s]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(){},body:{classList:{add(){},remove(){}}}},
     window:{scrollTo(){},top:{location:{assign(path){navigation.push(path);}}},addEventListener(name,fn){events.set(name,fn);}}};
-  vm.runInNewContext(`${source}\nglobalThis.test={state,contactExchangePanel,openContactExchange,updateContactExchange,refreshContactExchange,home,chips,normalizeFilters,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,captureDraft,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,discardDraft,publish,saveDraft};`,context);
+  vm.runInNewContext(`${source}\nglobalThis.test={state,contactExchangePanel,openContactExchange,updateContactExchange,refreshContactExchange,home,chips,normalizeFilters,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,captureDraft,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,startConversation,messagesPage,discardDraft,publish,saveDraft};`,context);
   context.test.state.session=session;
   return{...context.test,context,elements,modalRoot,events,navigation};
 }
 
 function preparedChallenge(c){Object.assign(c.state.emailLogin,{email:'example.student23@student.xjtlu.edu.cn',challengeEmail:'example.student23@student.xjtlu.edu.cn',challengeId:'challenge-test',code:'123456',expiresAt:Date.now()+600000});}
+
+test('conversation opened from a product returns to that product while inbox conversations return to the list',async()=>{
+  const c=client(schoolSession(),{startConversation:async()=>({conversationId:'conversation_1'})});
+  c.context.location.hash='#/product/product_1';
+  await c.startConversation('product_1');
+  assert.equal(c.context.location.hash,'/messages/conversation_1?from=product');
+  c.context.location.hash=`#${c.context.location.hash}`;
+  c.state.activeConversation={id:'conversation_1',productId:'product_1',otherName:'卖家',title:'台灯'};
+  assert.match(c.messagesPage(),/class="messages-back" href="#\/product\/product_1"[^>]*>.*返回商品/);
+  c.context.location.hash='#/messages/conversation_1';
+  assert.match(c.messagesPage(),/class="messages-back" href="#\/messages"[^>]*>.*消息列表/);
+});
 
 test('category switching retains separate drafts and submits only service parameters',()=>{
   const c=client(schoolSession());

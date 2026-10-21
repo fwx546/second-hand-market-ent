@@ -65,7 +65,7 @@ test('real listings retain school-login contact behavior',async()=>{
   let reads=0;const visitor=client(guest,{contact:async()=>{reads++;}});visitor.state.detail=real;await visitor.contact(real.id);
   assert.equal(reads,0);assert(visitor.modal.innerHTML.includes('学校邮箱'));
   const owner=client(member,{startConversation:async()=>{reads++;return{conversationId:'conversation_fixture'};},contact:async()=>{throw new Error('Private endpoint must not be read');}});owner.state.detail=real;await owner.contact(real.id);
-  assert.equal(reads,1);assert.equal(owner.context.location.hash,'/messages/conversation_fixture');assert(!owner.modal.innerHTML.includes('fixture_contact'));
+  assert.equal(reads,1);assert.equal(owner.context.location.hash,'/messages/conversation_fixture?from=product');assert(!owner.modal.innerHTML.includes('fixture_contact'));
 });
 
 test('filtered catalog counts come from the server through initial load and pagination',async()=>{
