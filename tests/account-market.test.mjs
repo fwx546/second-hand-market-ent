@@ -103,6 +103,26 @@ test('buyers and sellers can exchange private messages only inside their product
   assert.equal((await api(env, `/api/conversations/${conversationId}/messages`, { method: 'POST', viewer: B, body: { body: '' } })).status, 400);
 });
 
+test('product cards are generated for the conversation product and survive message reloads', async t => {
+  const env=fixture(t),listing=await publish(env,A),productId=listing.data.product.id;
+  const started=await api(env,'/api/conversations',{method:'POST',viewer:B,body:{productId}});
+  const conversationId=started.data.conversationId,path=`/api/conversations/${conversationId}/messages`;
+  const sent=await api(env,path,{method:'POST',viewer:B,body:{type:'product_card'}});
+  assert.equal(sent.status,201);
+  assert.equal(sent.data.message.kind,'product_card');
+  assert.equal(sent.data.message.card.productId,productId);
+  assert.equal(sent.data.message.card.title,listing.data.product.title);
+  assert.equal(sent.data.message.card.price,listing.data.product.price);
+  assert.match(sent.data.message.card.imageUrl,/^\/api\/media\//);
+  const received=await api(env,path,{viewer:A});
+  assert.equal(received.data.items[0].kind,'product_card');
+  assert.equal(received.data.items[0].card.productId,productId);
+  assert.equal(received.data.items[0].mine,false);
+  assert.equal((await api(env,'/api/me/conversations',{viewer:A})).data.items[0].lastMessage,'发送了商品卡片');
+  assert.equal((await api(env,path,{method:'POST',viewer:B,body:{body:'\u2063juzi:product-card:v1'}})).status,400);
+  assert.equal((await api(env,path,{method:'POST',viewer:{...B,userId:'intruder'},body:{type:'product_card'}})).status,404);
+});
+
 test('sold listings leave public feed, contacts, favorites and media while owner retains history', async t => {
   const env = fixture(t), created = await publish(env), item = created.data.product, path = `/api/products/${item.id}`;
   await api(env, `/api/me/favorites/${item.id}`, { method: 'PUT', viewer: B });

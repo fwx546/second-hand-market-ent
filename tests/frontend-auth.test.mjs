@@ -17,7 +17,7 @@ function client(session=guestSession(),api={}){
   const context={URL,URLSearchParams,FormData:TestFormData,console,api,categories:[],location,history:{replaceState(_a,_b,hash){location.hash=hash;}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},
     document:{querySelector:s=>elements[s]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(){},body:{classList:{add(){},remove(){}}}},
     window:{scrollTo(){},top:{location:{assign(path){navigation.push(path);}}},addEventListener(name,fn){events.set(name,fn);}}};
-  vm.runInNewContext(`${source}\nglobalThis.test={state,contactExchangePanel,openContactExchange,updateContactExchange,refreshContactExchange,home,chips,normalizeFilters,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,captureDraft,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,startConversation,messagesPage,discardDraft,publish,saveDraft};`,context);
+  vm.runInNewContext(`${source}\nglobalThis.test={state,contactExchangePanel,openContactExchange,updateContactExchange,refreshContactExchange,home,chips,normalizeFilters,signedIn,safeReturnTo,loginPath,loginPage,authGate,footer,promptLogin,profile,settingsPage,detail,newDraft,categoryFields,captureDraft,validateDraft,loadRoute,refreshSession,setLoginEmail,retrySeconds,challengeActive,sendEmailCode,verifyEmailCode,localPreviewLogin,becomeGuest,logout,confirmLogout,authExpired,clearPersonalState,hasUnsavedDraft,editProfile,saveProfile,confirmStatus,changeStatus,card,favorite,contact,startConversation,messagesPage,sendGreeting,sendProductCard,discardDraft,publish,saveDraft};`,context);
   context.test.state.session=session;
   return{...context.test,context,elements,modalRoot,events,navigation};
 }
@@ -34,6 +34,24 @@ test('conversation opened from a product returns to that product while inbox con
   assert.match(c.messagesPage(),/class="messages-back" href="#\/product\/product_1"[^>]*>.*返回商品/);
   c.context.location.hash='#/messages/conversation_1';
   assert.match(c.messagesPage(),/class="messages-back" href="#\/messages"[^>]*>.*消息列表/);
+});
+
+test('chat offers a one-line composer, quick greeting, contact exchange and a persistent product card',async()=>{
+  const sent=[];
+  const c=client(schoolSession(),{sendMessage:async(_id,body)=>{sent.push(body);return{message:{id:'m1',body,createdAt:1,mine:true}};},sendProductCard:async()=>{sent.push('card');return{message:{id:'m2',kind:'product_card',card:{productId:'product_1',title:'台灯',price:25},createdAt:2,mine:true}};}});
+  c.context.location.hash='#/messages/conversation_1?from=product';
+  c.state.activeConversation={id:'conversation_1',productId:'product_1',otherName:'卖家',title:'台灯'};
+  c.state.messages=[];
+  const html=c.messagesPage();
+  assert.match(html,/rows="1"/);
+  for(const action of ['toggle-exchange','send-greeting','send-product-card'])assert(html.includes(`data-action="${action}"`));
+  assert(html.includes('product-card-prompt'));
+  assert(html.includes('发送商品卡片'));
+  await c.sendGreeting();await c.sendProductCard();
+  assert.deepEqual(sent,['你好呀，商品还在吗？','card']);
+  assert.equal(c.state.messages[1].kind,'product_card');
+  assert(c.messagesPage().includes('chat-product-card'));
+  assert(!c.messagesPage().includes('product-card-prompt'));
 });
 
 test('category switching retains separate drafts and submits only service parameters',()=>{

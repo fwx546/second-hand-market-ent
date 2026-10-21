@@ -1240,12 +1240,33 @@ button:disabled { transform: none !important; }
 .chat-message > span { padding: 11px 14px; background: #fff; border: 1px solid #ecdfcd; border-radius: 16px 16px 16px 4px; overflow-wrap: anywhere; line-height: 1.6; }
 .chat-message.mine > span { background: #fff0c4; border-color: #f2dfb2; border-radius: 16px 16px 4px 16px; }
 .chat-message time { color: #9d8c7d; font-size: 10px; }
+.chat-product-card { display: grid; grid-template-columns: 68px minmax(0, 1fr) 16px; align-items: center; gap: 12px; width: min(320px, 72vw); padding: 9px; color: #493b2c; background: #fff; border: 1px solid #ecdfcd; border-radius: 14px; text-decoration: none; box-shadow: 0 3px 14px #5c3b130a; }
+.chat-product-card:hover { border-color: #dcaa77; background: #fffaf2; }
+.chat-product-card img, .chat-product-placeholder { width: 68px; height: 68px; object-fit: cover; border-radius: 9px; background: #fff0c4; }
+.chat-product-placeholder { display: grid; place-items: center; font-size: 30px; }
+.chat-product-info { display: grid; min-width: 0; gap: 3px; }
+.chat-product-info small { color: #9d8355; font-size: 11px; }
+.chat-product-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.chat-product-price { color: #bd6334; font-weight: 700; }
+.chat-product-card .icon { width: 16px; height: 16px; color: #9d8355; }
+.chat-compose-area { display: grid; gap: 9px; }
+.messages-page [hidden] { display: none !important; }
+.product-card-prompt { display: grid; gap: 10px; margin-bottom: 10px; padding: 13px; background: #fff9ea; border: 1px solid #efd8a8; border-radius: 16px; }
+.product-card-prompt > div:first-child strong { color: #6b4725; }
+.product-card-prompt p { margin: 3px 0 0; color: #84715f; font-size: 12px; }
+.product-card-prompt .chat-product-card { width: 100%; box-shadow: none; }
+.product-card-prompt-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#contact-exchange-panel:not([hidden]) { margin-bottom: 10px; }
+.message-tools { display: flex; gap: 8px; overflow-x: auto; padding: 1px 0 3px; }
+.message-tools button { flex: 0 0 auto; padding: 7px 11px; color: #805f3c; background: #fff8ea; border: 1px solid #ead9b8; border-radius: 999px; cursor: pointer; font: inherit; font-size: 12px; }
+.message-tools button:hover, .message-tools button[aria-expanded="true"] { color: #6b3d1b; background: #ffedc9; border-color: #dfbd83; }
+#message-error:empty { display: none; }
 .message-compose { display: flex; align-items: flex-end; gap: 10px; padding: 12px; background: #fff; border: 1px solid #ecdfcd; border-radius: 16px; }
-.message-compose textarea { flex: 1; min-width: 0; resize: vertical; min-height: 48px; max-height: 140px; padding: 12px; border: 1px solid #e8d9c5; border-radius: 12px; font: inherit; }
+.message-compose textarea { flex: 1; min-width: 0; height: 42px; min-height: 42px; max-height: 140px; box-sizing: border-box; resize: none; overflow-y: auto; padding: 9px 12px; border: 1px solid #e8d9c5; border-radius: 12px; font: inherit; line-height: 22px; }
 .message-compose .button { flex: 0 0 auto; }
 .settings-logout { width: 100%; color: #b22f25; background: #fff3f1; border: 1px solid #eab5ad; }
 .settings-logout:hover { color: #fff; background: #b22f25; }
-@media (max-width: 600px) { .settings-page { margin-top: 16px; } .settings-card { padding: 20px 17px; } .settings-fields { grid-template-columns: 1fr; } .messages-page { margin: 20px auto 86px; } .chat-heading { align-items: flex-start; flex-direction: column; gap: 5px; } .chat-log { height: calc(55vh - 80px); } .message-compose { position: sticky; bottom: calc(66px + env(safe-area-inset-bottom)); } }
+@media (max-width: 600px) { .settings-page { margin-top: 16px; } .settings-card { padding: 20px 17px; } .settings-fields { grid-template-columns: 1fr; } .messages-page { margin: 20px auto 86px; } .chat-heading { align-items: flex-start; flex-direction: column; gap: 5px; } .chat-log { height: calc(55vh - 80px); } .chat-compose-area { position: sticky; bottom: calc(66px + env(safe-area-inset-bottom)); padding: 8px 0; background: #fffaf3; } }
 #profile-form { display: grid; gap: 18px; margin-top: 23px; }
 #profile-form input, #profile-form select { width: 100%; min-height: 44px; }
 #profile-feedback { margin: 0; color: #a33f24; font-size: 12px; line-height: 1.8; }

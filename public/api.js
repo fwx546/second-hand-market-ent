@@ -33,6 +33,7 @@ export const api={
   contactExchange:id=>request(`/api/conversations/${encodeURIComponent(id)}/contact-exchange`),
   exchangeContact:(id,body)=>request(`/api/conversations/${encodeURIComponent(id)}/contact-exchange`,{method:'POST',body}),
   messages:id=>itemList(`/api/conversations/${encodeURIComponent(id)}/messages`),sendMessage:(id,body)=>request(`/api/conversations/${encodeURIComponent(id)}/messages`,{method:'POST',body:{body}}),
+  sendProductCard:id=>request(`/api/conversations/${encodeURIComponent(id)}/messages`,{method:'POST',body:{type:'product_card'}}),
   favorite:(id,liked)=>request(`/api/me/favorites/${encodeURIComponent(id)}`,{method:liked?'PUT':'DELETE'}),
   save:(id,body)=>request(id?productPath(id):'/api/products',{method:id?'PATCH':'POST',body}),
   remove:id=>request(productPath(id),{method:'DELETE'}),

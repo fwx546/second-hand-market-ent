@@ -13,7 +13,7 @@ async function setup(t){
 }
 function client(s,viewer){
   const modal={innerHTML:'',hasChildNodes(){return Boolean(this.innerHTML);}},compose={value:'尚未发送的私信内容'};
-  const elements={'#app':{innerHTML:''},'#modal-root':modal,'.modal':{focus(){}},'#toast':{classList:{add(){},remove(){}}},'#exchange-feedback':{textContent:''},'#contact-exchange-panel':{innerHTML:''},'#message-compose':compose};
+  const elements={'#app':{innerHTML:''},'#modal-root':modal,'.modal':{focus(){}},'#toast':{classList:{add(){},remove(){}}},'#exchange-feedback':{textContent:''},'#exchange-type':{value:''},'#exchange-value':{value:''},'#contact-exchange-panel':{innerHTML:''},'#message-compose':compose};
   class TestFormData extends FormData{constructor(form){super();for(const [key,value] of form?._values||[])this.set(key,value);}}
   const call=async(method,body)=>{const result=await serverApi(s.env,`/api/conversations/${s.id}/contact-exchange`,{method,viewer,body});if(result.status>=400){const error=new Error(result.data.error.message);error.status=result.status;throw error;}return result.data;};
   const context={URL,URLSearchParams,FormData:TestFormData,console,categories:[],location:{origin:'https://juzi.example',hash:`#/messages/${s.id}`},history:{replaceState(){}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},api:{contactExchange:()=>call('GET'),exchangeContact:(_id,body)=>call('POST',body)},document:{querySelector:key=>elements[key]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(){},body:{classList:{add(){},remove(){}}}},window:{scrollTo(){},addEventListener(){}}};
@@ -47,6 +47,16 @@ test('frontend strips accidental contacts on pending responses and refuses incom
   const pending=c.safeContactExchange({enabled:true,exchange:{id:'exchange_test',status:'pending',direction:'incoming',contacts:{other:{type:'wechat',value:'must_never_show'}}}});
   assert(!JSON.stringify(pending).includes('must_never_show'));
   assert.throws(()=>c.safeContactExchange({enabled:true,exchange:{id:'exchange_test',status:'accepted',direction:'incoming'}}));
+});
+
+test('exchange form fills a saved contact from settings while requiring fresh consent',async t=>{
+  const s=await setup(t),c=client(s,B);
+  c.state.session.user.qq='123456789';
+  await c.refreshContactExchange(s.id);
+  c.openContactExchange('request');
+  assert.equal(c.elements['#exchange-type'].value,'qq');
+  assert.equal(c.elements['#exchange-value'].value,'123456789');
+  assert(c.modal.innerHTML.includes('exchange-consent'));
 });
 
 test('late polling cannot restore contact values after a successful revoke',async t=>{

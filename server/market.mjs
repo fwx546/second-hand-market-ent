@@ -14,6 +14,7 @@ const FIELDS = ['title', 'category', 'price', 'originalPrice', 'condition', 'cam
 const MAX_IMAGE = 8 * 1024 * 1024;
 const DAY = 24 * 60 * 60 * 1000;
 const PRIVATE_HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+const PRODUCT_CARD_MESSAGE = '\u2063juzi:product-card:v1';
 
 class MarketError extends Error {
   constructor(status, code, message) { super(message); this.status = status; this.code = code; }
@@ -158,12 +159,28 @@ async function listConversations(db, userId) {
     JOIN users u ON u.id = CASE WHEN c.buyer_id = ? THEN c.seller_id ELSE c.buyer_id END
     WHERE c.buyer_id = ? OR c.seller_id = ? ORDER BY c.updated_at DESC, c.id DESC`, [userId, userId, userId]);
   return rows.map(row => ({ id: row.id, productId: row.product_id, title: row.title, seller: row.seller, productStatus: row.status,
-    otherName: row.other_name || '橘子同学', lastMessage: row.last_message || '开始聊聊这件好物', updatedAt: row.last_message_at || row.updated_at,
+    otherName: row.other_name || '橘子同学', lastMessage: row.last_message === PRODUCT_CARD_MESSAGE ? '发送了商品卡片' : row.last_message || '开始聊聊这件好物', updatedAt: row.last_message_at || row.updated_at,
     role: row.buyer_id === userId ? 'buyer' : 'seller' }));
 }
 
 async function conversationRow(db, conversationId, userId) {
   return first(db, 'SELECT * FROM conversations WHERE id = ? AND (buyer_id = ? OR seller_id = ?)', [conversationId, userId, userId]);
+}
+
+async function conversationProductCard(db, productId) {
+  const product = await productRow(db, productId);
+  if (!product) return null;
+  const image = await first(db, 'SELECT media_id FROM product_media WHERE product_id = ? ORDER BY position LIMIT 1', [productId]);
+  return { productId, title: product.title, price: product.price_cents / 100,
+    imageUrl: image ? `/api/media/${encodeURIComponent(image.media_id)}` : '',
+    status: productStatus(product), category: product.category };
+}
+
+function conversationMessage(row, userId, card) {
+  const productCard = row.body === PRODUCT_CARD_MESSAGE;
+  return { id: row.id, senderId: row.sender_id, body: productCard ? '' : row.body,
+    kind: productCard ? 'product_card' : 'text', ...(productCard ? { card } : {}),
+    createdAt: row.created_at, mine: row.sender_id === userId };
 }
 
 async function startConversation(request, db, viewer) {
@@ -182,24 +199,30 @@ async function startConversation(request, db, viewer) {
 }
 
 async function readConversationMessages(db, conversationId, userId) {
-  if (!await conversationRow(db, conversationId, userId)) fail(404, 'NOT_FOUND', '对话不存在。');
+  const conversation = await conversationRow(db, conversationId, userId);
+  if (!conversation) fail(404, 'NOT_FOUND', '对话不存在。');
   const rows = await all(db, `SELECT id, sender_id, body, created_at FROM
     (SELECT id, sender_id, body, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT 100)
     ORDER BY created_at ASC, id ASC`, [conversationId]);
-  return json({ items: rows.map(row => ({ id: row.id, senderId: row.sender_id, body: row.body, createdAt: row.created_at, mine: row.sender_id === userId })) });
+  const card = rows.some(row => row.body === PRODUCT_CARD_MESSAGE) ? await conversationProductCard(db, conversation.product_id) : null;
+  return json({ items: rows.map(row => conversationMessage(row, userId, card)) });
 }
 
 async function sendConversationMessage(request, db, conversationId, userId) {
   const body = await payload(request);
-  if (Object.keys(body).length !== 1 || !Object.hasOwn(body, 'body')) fail(400, 'INVALID_INPUT', '请只填写消息内容。');
+  const productCard = Object.keys(body).length === 1 && body.type === 'product_card';
+  if (!productCard && (Object.keys(body).length !== 1 || !Object.hasOwn(body, 'body'))) fail(400, 'INVALID_INPUT', '请只填写消息内容。');
   const conversation = await conversationRow(db, conversationId, userId);
   if (!conversation) fail(404, 'NOT_FOUND', '对话不存在。');
-  const value = text(body.body, '消息', 1, 1000, true), now = Date.now(), messageId = `msg_${crypto.randomUUID()}`;
+  const value = productCard ? PRODUCT_CARD_MESSAGE : text(body.body, '消息', 1, 1000, true);
+  if (!productCard && value === PRODUCT_CARD_MESSAGE) fail(400, 'INVALID_INPUT', '请填写消息内容。');
+  const now = Date.now(), messageId = `msg_${crypto.randomUUID()}`;
   await db.batch([
     statement(db, 'INSERT INTO messages (id, conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)', [messageId, conversationId, userId, value, now]),
     statement(db, 'UPDATE conversations SET updated_at = ? WHERE id = ?', [now, conversationId]),
   ]);
-  return json({ message: { id: messageId, senderId: userId, body: value, createdAt: now, mine: true } }, 201);
+  const card = productCard ? await conversationProductCard(db, conversation.product_id) : null;
+  return json({ message: conversationMessage({ id: messageId, sender_id: userId, body: value, created_at: now }, userId, card) }, 201);
 }
 async function ensureUser(db, userId) {
   await statement(db, 'INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING', [userId, '橘子同学', Date.now()]).run();
