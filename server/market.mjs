@@ -1,4 +1,5 @@
 import { demoImages } from './demo-catalog.mjs';
+import { handleContactExchange } from './contact-exchange.mjs';
 
 const CATEGORIES = ['appliance', 'ebike', 'daily', 'service'];
 const SERVICE_DIRECTIONS = ['学习辅导', '游戏服务', '设计与创作', '技术支持', '生活协助', '其他'];
@@ -516,6 +517,8 @@ export async function handleMarket(request, env, viewer = null, { development = 
     if (path === '/api/me' && method === 'PATCH') return await updateProfile(request, db, viewer);
     if (path === '/api/me/conversations' && method === 'GET') return json({ items: await listConversations(db, requireViewer(viewer)) });
     if (path === '/api/conversations' && method === 'POST') return await startConversation(request, db, viewer);
+    const exchangeMatch = path.match(/^\/api\/conversations\/([^/]+)\/contact-exchange$/);
+    if (exchangeMatch) return await handleContactExchange(request, db, id(decodeURIComponent(exchangeMatch[1])), requireViewer(viewer));
     let conversationMatch = path.match(/^\/api\/conversations\/([^/]+)\/messages$/);
     if (conversationMatch) {
       const conversationId = id(decodeURIComponent(conversationMatch[1])), userId = requireViewer(viewer);

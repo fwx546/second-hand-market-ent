@@ -27,7 +27,8 @@ export async function cloudflareSchema({ root = ROOT, maxMigration = Infinity } 
     const rows = db.prepare("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'd1_%' AND name NOT LIKE '__drizzle%' ORDER BY type DESC, name").all();
     if (rows.some(row => !['table', 'index'].includes(row.type))) throw new Error('Review new schema object types before exporting.');
     const tables = rows.filter(row => row.type === 'table'), names = tables.map(row => row.name).sort();
-    if (JSON.stringify(names) !== JSON.stringify([...CLOUDFLARE_TABLES].sort())) throw new Error('Business table list changed; review every table before exporting.');
+    const reviewedTables = files.includes('0010_contact_exchanges.sql') ? [...CLOUDFLARE_TABLES, 'contact_exchanges'] : CLOUDFLARE_TABLES;
+    if (JSON.stringify(names) !== JSON.stringify([...reviewedTables].sort())) throw new Error('Business table list changed; review every table before exporting.');
     const pending = new Map(tables.map(row => [row.name, row])), ordered = [], created = new Set();
     while (pending.size) {
       let progressed = false;
@@ -66,7 +67,7 @@ export async function generateCloudflareSchema({ root = ROOT, check = false } = 
       if (JSON.stringify(signature(actual)) !== JSON.stringify(signature(expected))) throw new Error('Incremental Cloudflare schema differs from source migrations.');
     } finally { actual.close(); expected.close(); }
   }
-  return { path: target, tables: CLOUDFLARE_TABLES.length, schemaOnly: true, matches: true };
+  return { path: target, tables: (await cloudflareSchema({ root })).match(/CREATE TABLE /g).length, schemaOnly: true, matches: true };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

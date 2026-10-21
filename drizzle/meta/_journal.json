@@ -71,6 +71,13 @@
       "when": 1792550997183,
       "tag": "0009_service_listings",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792555361993,
+      "tag": "0010_contact_exchanges",
+      "breakpoints": true
     }
   ]
 }

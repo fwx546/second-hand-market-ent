@@ -101,6 +101,29 @@ export const messages = sqliteTable("messages", {
   createdAt: integer("created_at").notNull(),
 }, (table) => [index("messages_conversation_time").on(table.conversationId, table.createdAt)]);
 
+// Contact snapshots are disclosed only after both conversation participants consent.
+export const contactExchanges = sqliteTable("contact_exchanges", {
+  id: text("id").primaryKey(),
+  conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  requesterId: text("requester_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  requesterType: text("requester_type").notNull(),
+  requesterValue: text("requester_value").notNull(),
+  responderType: text("responder_type"),
+  responderValue: text("responder_value"),
+  status: text("status").notNull().default("pending"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+}, (table) => [
+  uniqueIndex("contact_exchanges_active_conversation").on(table.conversationId).where(sql`${table.status} IN ('pending', 'accepted')`),
+  index("contact_exchanges_requester_time").on(table.requesterId, table.createdAt),
+  index("contact_exchanges_conversation_time").on(table.conversationId, table.createdAt),
+  check("contact_exchanges_status", sql`${table.status} IN ('pending', 'accepted', 'declined', 'cancelled', 'revoked', 'expired')`),
+  check("contact_exchanges_requester_type", sql`${table.requesterType} IN ('wechat', 'phone', 'qq')`),
+  check("contact_exchanges_responder_type", sql`${table.responderType} IS NULL OR ${table.responderType} IN ('wechat', 'phone', 'qq')`),
+  check("contact_exchanges_consent_values", sql`(${table.status} NOT IN ('pending', 'accepted') OR length(${table.requesterValue}) BETWEEN 3 AND 80) AND (${table.status} <> 'accepted' OR (${table.responderType} IS NOT NULL AND ${table.responderValue} IS NOT NULL AND length(${table.responderValue}) BETWEEN 3 AND 80))`),
+]);
+
 // Ten-minute, browser-bound, one-use OIDC transactions. No provider tokens or profile data.
 export const authFlows = sqliteTable("auth_flows", {
   stateHash: text("state_hash").primaryKey(),

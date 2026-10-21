@@ -57,7 +57,7 @@ test('schema snapshot exactly matches all migrations and contains only empty bus
 
 test('schema generator checks immutable output without rewriting it', async () => {
   const result = await generateCloudflareSchema({ root: ROOT, check: true });
-  assert.equal(result.schemaOnly, true); assert.equal(result.tables, 12); assert.equal(result.matches, true);
+  assert.equal(result.schemaOnly, true); assert.equal(result.tables, 13); assert.equal(result.matches, true);
 });
 
 test('LF, CRLF and mixed migration checkouts produce the same schema without rewriting applied history', async t => {
