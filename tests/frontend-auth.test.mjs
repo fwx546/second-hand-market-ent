@@ -53,6 +53,15 @@ test('service publishing uses service fields and conditional location/custom pri
   html=c.publish(); assert(html.includes('服务地点')); assert(html.includes('自定义单位')); assert(!html.includes('线上沟通方式'));
 });
 
+test('service detail and cards replace physical labels and show units; management pauses bookings',()=>{
+  const c=client(schoolSession()),p={id:'service1',category:'service',title:'Python 辅导',price:10,originalPrice:100,condition:'不适用',campus:'SIP 校区',location:'线上服务',description:'Python 基础辅导服务',status:'active',seller:'测试同学',images:[],specs:{服务方向:'学习辅导',计价单位:'每小时',服务方式:'线上服务',服务范围:'基础知识','服务时长／交付周期':'60分钟',预约安排:'提前一天'}};
+  const detail=c.detail(p),card=c.card(p,{manage:true});
+  for(const text of ['关于这项服务','线上服务','学习辅导','／小时','联系服务者'])assert(detail.includes(text),text);
+  for(const text of ['线下面交','不适用','购入价','关于这件好物'])assert(!detail.includes(text),text);
+  assert(card.includes('暂停接单'));assert(!card.includes('标记售出'));assert(!card.includes('不适用'));
+  p.status='inactive';assert(c.card(p,{manage:true}).includes('恢复接单'));
+});
+
 test('only school-email verification establishes business identity, including in development',()=>{
   assert(client(schoolSession()).signedIn());
   assert(!client(guestSession()).signedIn());
