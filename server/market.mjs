@@ -1,5 +1,5 @@
 import { demoImages } from './demo-catalog.mjs';
-import { handleContactExchange } from './contact-exchange.mjs';
+import { CONTACT_EXCHANGE_MESSAGE_PREFIX, handleContactExchange } from './contact-exchange.mjs';
 
 const CATEGORIES = ['appliance', 'ebike', 'daily', 'service'];
 const SERVICE_DIRECTIONS = ['学习辅导', '游戏服务', '设计与创作', '技术支持', '生活协助', '其他'];
@@ -159,7 +159,7 @@ async function listConversations(db, userId) {
     JOIN users u ON u.id = CASE WHEN c.buyer_id = ? THEN c.seller_id ELSE c.buyer_id END
     WHERE c.buyer_id = ? OR c.seller_id = ? ORDER BY c.updated_at DESC, c.id DESC`, [userId, userId, userId]);
   return rows.map(row => ({ id: row.id, productId: row.product_id, title: row.title, seller: row.seller, productStatus: row.status,
-    otherName: row.other_name || '橘子同学', lastMessage: row.last_message === PRODUCT_CARD_MESSAGE ? '发送了商品卡片' : row.last_message || '开始聊聊这件好物', updatedAt: row.last_message_at || row.updated_at,
+    otherName: row.other_name || '橘子同学', lastMessage: row.last_message === PRODUCT_CARD_MESSAGE ? '发送了商品卡片' : row.last_message?.startsWith(CONTACT_EXCHANGE_MESSAGE_PREFIX) ? '申请交换联系方式' : row.last_message || '开始聊聊这件好物', updatedAt: row.last_message_at || row.updated_at,
     role: row.buyer_id === userId ? 'buyer' : 'seller' }));
 }
 
@@ -176,10 +176,12 @@ async function conversationProductCard(db, productId) {
     status: productStatus(product), category: product.category };
 }
 
-function conversationMessage(row, userId, card) {
+function conversationMessage(row, userId, card, exchange) {
   const productCard = row.body === PRODUCT_CARD_MESSAGE;
+  const exchangeId = row.body.startsWith(CONTACT_EXCHANGE_MESSAGE_PREFIX) ? row.body.slice(CONTACT_EXCHANGE_MESSAGE_PREFIX.length) : '';
   return { id: row.id, senderId: row.sender_id, body: productCard ? '' : row.body,
-    kind: productCard ? 'product_card' : 'text', ...(productCard ? { card } : {}),
+    kind: productCard ? 'product_card' : exchangeId ? 'contact_exchange' : 'text', ...(productCard ? { card } : {}),
+    ...(exchangeId ? { body: '', exchange: { id: exchangeId, status: exchange?.status || 'unknown', offeredType: exchange?.requester_type || '' } } : {}),
     createdAt: row.created_at, mine: row.sender_id === userId };
 }
 
@@ -205,7 +207,10 @@ async function readConversationMessages(db, conversationId, userId) {
     (SELECT id, sender_id, body, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT 100)
     ORDER BY created_at ASC, id ASC`, [conversationId]);
   const card = rows.some(row => row.body === PRODUCT_CARD_MESSAGE) ? await conversationProductCard(db, conversation.product_id) : null;
-  return json({ items: rows.map(row => conversationMessage(row, userId, card)) });
+  const exchangeIds = [...new Set(rows.filter(row => row.body.startsWith(CONTACT_EXCHANGE_MESSAGE_PREFIX)).map(row => row.body.slice(CONTACT_EXCHANGE_MESSAGE_PREFIX.length)))];
+  const exchangeRows = exchangeIds.length ? await all(db, `SELECT id,status,requester_type FROM contact_exchanges WHERE conversation_id=? AND id IN (${exchangeIds.map(() => '?').join(',')})`, [conversationId, ...exchangeIds]) : [];
+  const exchanges = new Map(exchangeRows.map(row => [row.id, row]));
+  return json({ items: rows.map(row => conversationMessage(row, userId, card, exchanges.get(row.body.slice(CONTACT_EXCHANGE_MESSAGE_PREFIX.length)))) });
 }
 
 async function sendConversationMessage(request, db, conversationId, userId) {
@@ -215,7 +220,7 @@ async function sendConversationMessage(request, db, conversationId, userId) {
   const conversation = await conversationRow(db, conversationId, userId);
   if (!conversation) fail(404, 'NOT_FOUND', '对话不存在。');
   const value = productCard ? PRODUCT_CARD_MESSAGE : text(body.body, '消息', 1, 1000, true);
-  if (!productCard && value === PRODUCT_CARD_MESSAGE) fail(400, 'INVALID_INPUT', '请填写消息内容。');
+  if (!productCard && (value === PRODUCT_CARD_MESSAGE || value.startsWith(CONTACT_EXCHANGE_MESSAGE_PREFIX))) fail(400, 'INVALID_INPUT', '请填写消息内容。');
   const now = Date.now(), messageId = `msg_${crypto.randomUUID()}`;
   await db.batch([
     statement(db, 'INSERT INTO messages (id, conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)', [messageId, conversationId, userId, value, now]),

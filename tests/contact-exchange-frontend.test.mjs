@@ -13,13 +13,14 @@ async function setup(t){
 }
 function client(s,viewer){
   const modal={innerHTML:'',hasChildNodes(){return Boolean(this.innerHTML);}},compose={value:'尚未发送的私信内容'};
-  const elements={'#app':{innerHTML:''},'#modal-root':modal,'.modal':{focus(){}},'#toast':{classList:{add(){},remove(){}}},'#exchange-feedback':{textContent:''},'#exchange-type':{value:''},'#exchange-value':{value:''},'#contact-exchange-panel':{innerHTML:''},'#message-compose':compose};
+  const elements={'#app':{innerHTML:''},'#modal-root':modal,'.modal':{focus(){}},'#toast':{classList:{add(){},remove(){}}},'#exchange-feedback':{textContent:''},'#exchange-type':{value:''},'#exchange-value':{value:''},'#exchange-consent':{checked:false},'#contact-exchange-panel':{innerHTML:''},'#message-compose':compose};
+  const handlers={};
   class TestFormData extends FormData{constructor(form){super();for(const [key,value] of form?._values||[])this.set(key,value);}}
   const call=async(method,body)=>{const result=await serverApi(s.env,`/api/conversations/${s.id}/contact-exchange`,{method,viewer,body});if(result.status>=400){const error=new Error(result.data.error.message);error.status=result.status;throw error;}return result.data;};
-  const context={URL,URLSearchParams,FormData:TestFormData,console,categories:[],location:{origin:'https://juzi.example',hash:`#/messages/${s.id}`},history:{replaceState(){}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},api:{contactExchange:()=>call('GET'),exchangeContact:(_id,body)=>call('POST',body)},document:{querySelector:key=>elements[key]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(){},body:{classList:{add(){},remove(){}}}},window:{scrollTo(){},addEventListener(){}}};
-  vm.runInNewContext(`${source}\nglobalThis.qa={state,contactExchangePanel,openContactExchange,submitContactExchange,updateContactExchange,refreshContactExchange,safeContactExchange};`,context);
+  const context={URL,URLSearchParams,FormData:TestFormData,console,categories:[],location:{origin:'https://juzi.example',hash:`#/messages/${s.id}`},history:{replaceState(){}},setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},api:{contactExchange:()=>call('GET'),exchangeContact:(_id,body)=>call('POST',body)},document:{querySelector:key=>elements[key]||null,querySelectorAll:()=>[],activeElement:null,addEventListener(type,handler){handlers[type]=handler;},body:{classList:{add(){},remove(){}}}},window:{scrollTo(){},addEventListener(){}}};
+  vm.runInNewContext(`${source}\nglobalThis.qa={state,contactExchangePanel,openContactExchange,submitContactExchange,updateContactExchange,refreshContactExchange,safeContactExchange,chatMessageMarkup};`,context);
   const qa=context.qa;qa.state.session={user:{id:viewer.userId,emailVerified:true},authentication:{provider:'school_email'}};qa.state.activeConversation={id:s.id,otherName:'本地测试对方'};
-  return{...qa,elements,modal,compose,context};
+  return{...qa,elements,modal,compose,context,handlers};
 }
 function form(s,action,requestId,type,value,consent=true){return{reportValidity:()=>true,dataset:{conversationId:s.id,exchangeAction:action,requestId},_values:[['type',type],['value',value],...(consent?[['consent','on']]:[])]};}
 
@@ -32,6 +33,9 @@ test('actual frontend submission and backend transition complete mutual exchange
   assert(buyer.elements['#exchange-feedback'].textContent.includes('确认本次分享'));
   await buyer.submitContactExchange(form(s,'request','','wechat','buyer_private'));
   assert.equal(buyer.state.contactExchange.exchange.status,'pending');assert(!buyer.contactExchangePanel().includes('buyer_private'));
+  const card=(await serverApi(s.env,`/api/conversations/${s.id}/messages`,{viewer:A})).data.items[0];
+  assert.equal(card.kind,'contact_exchange');assert(seller.chatMessageMarkup(card).includes('查看并处理申请'));
+  assert(!seller.chatMessageMarkup(card).includes('buyer_private'));
   await seller.refreshContactExchange(s.id);assert(seller.contactExchangePanel().includes('同意并选择我的联系方式'));
   assert(!seller.contactExchangePanel().includes('buyer_private'));
   const id=seller.state.contactExchange.exchange.id;seller.openContactExchange('accept');
@@ -57,6 +61,11 @@ test('exchange form fills a saved contact from settings while requiring fresh co
   assert.equal(c.elements['#exchange-type'].value,'qq');
   assert.equal(c.elements['#exchange-value'].value,'123456789');
   assert(c.modal.innerHTML.includes('exchange-consent'));
+  c.state.session.user.wechat='saved_wechat';
+  c.elements['#exchange-consent'].checked=true;
+  c.handlers.change({target:{id:'exchange-type',value:'wechat'}});
+  assert.equal(c.elements['#exchange-value'].value,'saved_wechat');
+  assert.equal(c.elements['#exchange-consent'].checked,false);
 });
 
 test('late polling cannot restore contact values after a successful revoke',async t=>{

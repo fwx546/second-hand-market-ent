@@ -50,6 +50,13 @@ async function listing(env, title, withChat = true) {
 }
 async function shot(page, name) { await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: join(output, name + '.png'), fullPage: false, animations: 'disabled' }); }
 async function ready(page, name) { await page.getByRole('heading', { name, exact: true }).waitFor({ timeout: 20000 }); }
+async function chatReady(page) { await page.getByRole('textbox', { name: '私信内容', exact: true }).waitFor({ timeout: 20000 }); }
+async function exchangeReady(page, name) {
+  await chatReady(page);
+  await page.locator('#contact-exchange-panel h2').filter({ hasText: name }).waitFor({ state: 'attached', timeout: 20000 });
+  if (!(await page.locator('#contact-exchange-panel').isVisible())) await page.locator('[data-action="toggle-exchange"]').click();
+  await ready(page, name);
+}
 async function noNumbers(page) { const text = await page.locator('body').innerText(); assert(!text.includes('browser_buyer_private')); assert(!text.includes('123456789')); }
 async function offer(page, value, accept = false) {
   await page.getByRole('button', { name: accept ? '同意并选择我的联系方式' : '申请交换联系方式', exact: true }).click();
@@ -78,9 +85,9 @@ try {
   // Detail opens chat; neither publishing nor private messages require numbers.
   await buyer.goto(`${buyerOrigin}/#/product/${first.product.id}`);
   await buyer.getByRole('button', { name: '发消息', exact: true }).first().click();
-  await ready(buyer, '联系方式由你决定');
+  await chatReady(buyer);
   const id = new URL(await buyer.url()).hash.split('/messages/')[1]; assert(id);
-  await seller.goto(`${sellerOrigin}/#/messages/${id}`); await ready(seller, '联系方式由你决定');
+  await seller.goto(`${sellerOrigin}/#/messages/${id}`); await chatReady(seller);
   const direct = await buyer.request.get(`${buyerOrigin}/api/products/${first.product.id}/contact`); assert.equal(direct.status(), 403);
   await buyer.getByRole('textbox', { name: '私信内容', exact: true }).fill('尚未发送的浏览器草稿');
   await buyer.getByRole('button', { name: '申请交换联系方式', exact: true }).click();
@@ -89,10 +96,10 @@ try {
   assert(await buyer.getByRole('dialog').isVisible());
   assert.equal(current.DB.sqlite.prepare('SELECT count(*) AS n FROM contact_exchanges').get().n, 0);
   await buyer.locator('#exchange-consent').check(); await buyer.getByRole('button', { name: '发送申请', exact: true }).click();
-  await ready(buyer, '交换申请已发送'); await ready(seller, '对方申请交换联系方式');
+  await exchangeReady(buyer, '交换申请已发送'); await exchangeReady(seller, '对方申请交换联系方式');
   await noNumbers(seller); await shot(seller, 'pending-desktop');
   await offer(seller, '123456789', true);
-  await ready(seller, '双方已同意本次交换'); await ready(buyer, '双方已同意本次交换');
+  await exchangeReady(seller, '双方已同意本次交换'); await exchangeReady(buyer, '双方已同意本次交换');
   assert(await seller.locator('#contact-exchange-panel').evaluate(element => element === document.activeElement));
   assert((await buyer.locator('.exchange-contacts').innerText()).includes('123456789'));
   assert((await seller.locator('.exchange-contacts').innerText()).includes('browser_buyer_private'));
@@ -102,7 +109,7 @@ try {
   await noNumbers(third);
   await buyer.getByRole('button', { name: '停止共享', exact: true }).click();
   await buyer.getByRole('dialog').getByRole('button', { name: '停止共享', exact: true }).click();
-  await buyer.getByText('本次共享已停止。', { exact: true }).waitFor(); await seller.getByText('本次共享已停止。', { exact: true }).waitFor({ timeout: 20000 });
+  await buyer.locator('.chat-exchange-card').filter({ hasText: '联系方式共享已停止' }).waitFor(); await seller.locator('.chat-exchange-card').filter({ hasText: '联系方式共享已停止' }).waitFor({ timeout: 20000 });
   await noNumbers(buyer); await noNumbers(seller);
   await buyer.getByRole('button', { name: '发送', exact: true }).click();
   await seller.locator('.chat-message').filter({ hasText: '尚未发送的浏览器草稿' }).waitFor({ timeout: 20000 });
@@ -111,25 +118,25 @@ try {
   // Seller-initiated requests are optional for the buyer, too.
   const second = await listing(current, '卖家申请与买家拒绝');
   await Promise.all([buyer.goto(`${buyerOrigin}/#/messages/${second.id}`), seller.goto(`${sellerOrigin}/#/messages/${second.id}`)]);
-  await ready(seller, '联系方式由你决定'); await offer(seller, 'seller_offer_fixture');
-  await ready(buyer, '对方申请交换联系方式'); await buyer.getByRole('button', { name: '暂不交换', exact: true }).click();
-  await buyer.getByText('本次申请未被接受。', { exact: true }).waitFor(); await seller.getByText('本次申请未被接受。', { exact: true }).waitFor({ timeout: 20000 });
+  await chatReady(seller); await offer(seller, 'seller_offer_fixture');
+  await exchangeReady(buyer, '对方申请交换联系方式'); await buyer.getByRole('button', { name: '暂不交换', exact: true }).click();
+  await buyer.locator('.chat-exchange-card').filter({ hasText: '申请已被婉拒' }).waitFor(); await seller.locator('.chat-exchange-card').filter({ hasText: '申请已被婉拒' }).waitFor({ timeout: 20000 });
   assert(!((await buyer.locator('body').innerText()).includes('seller_offer_fixture'))); checks.push('seller-initiates', 'recipient-declines');
 
   // An acceptance modal open before cancellation cannot approve the stale request.
   const thirdChat = await listing(current, '撤回与过时同意');
   await Promise.all([buyer.goto(`${buyerOrigin}/#/messages/${thirdChat.id}`), seller.goto(`${sellerOrigin}/#/messages/${thirdChat.id}`)]);
-  await ready(buyer, '联系方式由你决定'); await offer(buyer, 'cancel_fixture'); await ready(seller, '对方申请交换联系方式');
+  await chatReady(buyer); await offer(buyer, 'cancel_fixture'); await exchangeReady(seller, '对方申请交换联系方式');
   await seller.getByRole('button', { name: '同意并选择我的联系方式', exact: true }).click();
   await seller.getByLabel('我的联系方式', { exact: true }).fill('seller_cancel_fixture'); await seller.locator('#exchange-consent').check();
-  await buyer.getByRole('button', { name: '撤回申请', exact: true }).click();
+  await exchangeReady(buyer, '交换申请已发送'); await buyer.getByRole('button', { name: '撤回申请', exact: true }).click();
   await seller.getByRole('button', { name: '同意并交换', exact: true }).click();
   await seller.locator('#exchange-feedback').filter({ hasText: '申请状态已变化' }).waitFor(); await seller.getByRole('button', { name: '关闭弹窗', exact: true }).click();
   checks.push('cancel-request', 'stale-accept-rejected');
 
   // Form modal, focus trap and all responsive layouts.
   const responsive = await listing(current, '响应式与键盘验收');
-  await buyer.goto(`${buyerOrigin}/#/messages/${responsive.id}`); await ready(buyer, '联系方式由你决定');
+  await buyer.goto(`${buyerOrigin}/#/messages/${responsive.id}`); await chatReady(buyer);
   for (const width of [320, 390, 1440]) {
     await buyer.setViewportSize({ width, height: 900 });
     assert(await buyer.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -144,7 +151,7 @@ try {
   checks.push('responsive-320-390-1440', 'keyboard-focus-trap', 'escape-to-dismiss');
 
   // Old database: no exchange table, but messaging is still usable.
-  await oldPage.goto(`${oldOrigin}/#/messages/${old.id}`); await ready(oldPage, '安心站内沟通');
+  await oldPage.goto(`${oldOrigin}/#/messages/${old.id}`); await chatReady(oldPage);
   await oldPage.getByRole('textbox', { name: '私信内容', exact: true }).fill('旧库仍可私信'); await oldPage.getByRole('button', { name: '发送', exact: true }).click();
   await oldPage.locator('.chat-message').filter({ hasText: '旧库仍可私信' }).waitFor(); checks.push('legacy-schema-chat');
 

@@ -1,5 +1,6 @@
 const DAY = 86400000;
 const TYPES = ['wechat', 'phone', 'qq'];
+export const CONTACT_EXCHANGE_MESSAGE_PREFIX = '\u2063juzi:contact-exchange:v1:';
 class ExchangeError extends Error {
   constructor(status, code, message) { super(message); Object.assign(this, { status, code }); }
 }
@@ -82,7 +83,7 @@ export async function handleContactExchange(request, db, conversationId, userId)
     const keys = ['action', ...(body.action !== 'request' ? ['requestId'] : []), ...(sharing ? ['type', 'value', 'consent'] : [])];
     if (!['request', 'accept', 'decline', 'cancel', 'revoke'].includes(body.action) || Object.keys(body).some(key => !keys.includes(key))) fail(400, 'INVALID_ACTION', '申请操作不正确。');
     if (body.action === 'request') {
-      const offered = contact(body), exchangeId = `exchange_${crypto.randomUUID()}`;
+      const offered = contact(body), exchangeId = `exchange_${crypto.randomUUID()}`, messageId = `msg_${crypto.randomUUID()}`;
       const results = await db.batch([
         stmt(db, "UPDATE contact_exchanges SET status='expired', requester_value='', responder_value=NULL, updated_at=? WHERE conversation_id=? AND status='pending' AND expires_at<=?", [now, conversationId, now]),
         stmt(db, `INSERT INTO contact_exchanges (id,conversation_id,requester_id,requester_type,requester_value,status,created_at,updated_at,expires_at)
@@ -92,6 +93,11 @@ export async function handleContactExchange(request, db, conversationId, userId)
           AND (SELECT count(*) FROM contact_exchanges WHERE requester_id=? AND created_at>?)<5
           AND (SELECT count(*) FROM contact_exchanges WHERE conversation_id=? AND created_at>?)<3`,
         [exchangeId, conversationId, userId, offered.type, offered.value, now, now, now + 7 * DAY, conversationId, conversationId, now - DAY, userId, now - DAY, conversationId, now - DAY]),
+        stmt(db, `INSERT INTO messages (id,conversation_id,sender_id,body,created_at)
+          SELECT ?,?,?,?,? WHERE EXISTS (SELECT 1 FROM contact_exchanges WHERE id=? AND status='pending')`,
+        [messageId, conversationId, userId, CONTACT_EXCHANGE_MESSAGE_PREFIX + exchangeId, now, exchangeId]),
+        stmt(db, `UPDATE conversations SET updated_at=? WHERE id=? AND EXISTS
+          (SELECT 1 FROM contact_exchanges WHERE id=? AND status='pending')`, [now, conversationId, exchangeId]),
       ]);
       if (!results[1].meta?.changes) {
         const active = await first(db, "SELECT id FROM contact_exchanges WHERE conversation_id=? AND status IN ('pending','accepted')", [conversationId]);

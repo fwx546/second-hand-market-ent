@@ -195,7 +195,8 @@ function contactExchangePanel(){
   const cooldown=exchange&&['declined','revoked'].includes(exchange.status)&&exchange.updatedAt+86400000>Date.now();
   return `<section class="contact-exchange"><h2>联系方式由你决定</h2>${hint}${label?`<p>${label}</p>`:''}${cooldown?'<p class="exchange-hint">请尊重对方意愿，24 小时后可重新申请。</p>':`<button class="button secondary small" data-action="exchange-request" ${busy}>申请交换联系方式</button>`}${error}</section>`;
 }
-function exchangeToolLabel(){if(state.activeConversation?.isPreviewDemo)return '了解交换联系方式';const exchange=state.contactExchange?.exchange;return exchange?.status==='pending'&&exchange.direction==='incoming'?'处理联系申请':exchange?.status==='accepted'?'查看联系卡片':'申请交换联系方式';}
+function exchangeCanRequest(){const result=state.contactExchange,exchange=result?.exchange;if(result?.enabled!==true)return false;if(!exchange)return true;if(['pending','accepted'].includes(exchange.status))return false;return !['declined','revoked'].includes(exchange.status)||exchange.updatedAt+86400000<=Date.now();}
+function exchangeToolLabel(){if(state.activeConversation?.isPreviewDemo)return '了解交换联系方式';const exchange=state.contactExchange?.exchange;return exchange?.status==='pending'?exchange.direction==='incoming'?'处理联系申请':'查看交换申请':exchange?.status==='accepted'?'查看联系卡片':'申请交换联系方式';}
 const exchangePanelMarkup=new WeakMap();
 function renderContactExchangePanel(){
   const panel=$('#contact-exchange-panel');if(!panel)return;
@@ -231,10 +232,11 @@ async function refreshContactExchange(id){
 }
 function openContactExchange(action){
   if(exchangeSaving||!state.activeConversation||state.contactExchange?.enabled!==true)return;
+  if(action==='request'&&!exchangeCanRequest())return;
   const exchange=state.contactExchange.exchange;
   if(action==='accept'&&(!exchange||exchange.status!=='pending'||exchange.direction!=='incoming'))return;
   const saved=state.session?.user||{},type=['wechat','qq','phone'].find(key=>saved[key])||'wechat';
-  showModal(`<h2>${action==='accept'?'同意本次交换':'申请交换联系方式'}</h2><p>选择你愿意在当前对话分享的一项。${action==='accept'?'提交后，你和对方将同时看到本次联系方式。':'对方同意前，双方均看不到号码。'}</p><form id="exchange-form" data-conversation-id="${esc(state.activeConversation.id)}" data-exchange-action="${action}" data-request-id="${esc(action==='accept'?exchange.id:'')}"><div class="form-field"><label for="exchange-type">本次分享的方式</label><select id="exchange-type" name="type"><option value="wechat">微信号</option><option value="qq">QQ 号</option><option value="phone">手机号</option></select></div><div class="form-field"><label for="exchange-value">我的联系方式</label><input id="exchange-value" name="value" required minlength="3" maxlength="80" autocomplete="off" placeholder="本次愿意分享的微信号"></div><label class="checkbox-field exchange-consent"><input id="exchange-consent" name="consent" type="checkbox" required>我自愿在对方同意后，向当前对话的另一方分享本次填写的信息。</label><p class="exchange-hint">请勿提供他人的联系方式。对方可能保存信息；停止共享无法撤回已被看到的内容。</p><p id="exchange-feedback" role="alert"></p><div class="modal-actions"><button type="button" class="button secondary" data-action="close-modal">取消</button><button class="button primary" type="submit">${action==='accept'?'同意并交换':'发送申请'}</button></div></form>`,'自愿交换联系方式');
+  showModal(`<h2>${action==='accept'?'同意本次交换':'申请交换联系方式'}</h2><p>选择你愿意在当前对话分享的一项。${action==='accept'?'提交后，你和对方将同时看到本次联系方式。':'对方同意前，双方均看不到号码。'}已在设置中填写的信息会自动带入，也可以在这里修改本次分享的内容。</p><form id="exchange-form" data-conversation-id="${esc(state.activeConversation.id)}" data-exchange-action="${action}" data-request-id="${esc(action==='accept'?exchange.id:'')}"><div class="form-field"><label for="exchange-type">本次分享的方式</label><select id="exchange-type" name="type"><option value="wechat">微信号</option><option value="qq">QQ 号</option><option value="phone">手机号</option></select></div><div class="form-field"><label for="exchange-value">我的联系方式</label><input id="exchange-value" name="value" required minlength="3" maxlength="80" autocomplete="off" placeholder="本次愿意分享的微信号"></div><label class="checkbox-field exchange-consent"><input id="exchange-consent" name="consent" type="checkbox" required>我自愿在对方同意后，向当前对话的另一方分享本次填写的信息。</label><p class="exchange-hint">请勿提供他人的联系方式。对方可能保存信息；停止共享无法撤回已被看到的内容。</p><p id="exchange-feedback" role="alert"></p><div class="modal-actions"><button type="button" class="button secondary" data-action="close-modal">取消</button><button class="button primary" type="submit">${action==='accept'?'同意并交换':'发送申请'}</button></div></form>`,'自愿交换联系方式');
   const selected=$('#exchange-type'),value=$('#exchange-value');
   if(selected)selected.value=type;
   if(value)value.value=saved[type]||'';
@@ -251,9 +253,14 @@ async function updateContactExchange(action,requestId,extra={}){
   const id=state.activeConversation.id,identity=identitySnapshot(),version=modalVersion;
   exchangeSaving=true;exchangeVersion++;if(action==='revoke')state.contactExchange=null;renderContactExchangePanel();
   const form=$('#exchange-form');if(form)for(const control of form.elements)control.disabled=true;
-  try{const result=await api.exchangeContact(id,{action,...(action==='request'?{}:{requestId}),...extra});if(!sameIdentity(identity)||state.activeConversation?.id!==id)return;const checked=safeContactExchange(result);if(checked.enabled!==true||!checked.exchange)throw new Error('交换结果尚未确认，请刷新对话。');state.contactExchange=checked;state.exchangeError='';renderContactExchangePanel();if(version===modalVersion)closeModal();}
+  try{const result=await api.exchangeContact(id,{action,...(action==='request'?{}:{requestId}),...extra});if(!sameIdentity(identity)||state.activeConversation?.id!==id)return;const checked=safeContactExchange(result);if(checked.enabled!==true||!checked.exchange)throw new Error('交换结果尚未确认，请刷新对话。');state.contactExchange=checked;state.exchangeError='';renderContactExchangePanel();if(version===modalVersion)closeModal();await reloadChatMessages(id);}
   catch(error){if(!sameIdentity(identity)||state.activeConversation?.id!==id||authExpired(error))return;const feedback=$('#exchange-feedback');if(feedback&&version===modalVersion)feedback.textContent=message(error);else state.exchangeError=message(error);}
   finally{exchangeSaving=false;if(form?.isConnected)for(const control of form.elements)control.disabled=false;if(sameIdentity(identity)&&state.activeConversation?.id===id)renderContactExchangePanel();}
+}
+async function reloadChatMessages(id){
+  if(routeInfo().path!==`/messages/${id}`||state.activeConversation?.id!==id)return;
+  try{const result=await api.messages(id);if(state.activeConversation?.id!==id||routeInfo().path!==`/messages/${id}`)return;state.messages=result.items||[];const log=$('#chat-log');if(log){log.innerHTML=state.messages.map(chatMessageMarkup).join('');log.scrollTop=log.scrollHeight;}}
+  catch{/* The exchange succeeded; ordinary message polling can refresh the card later. */}
 }
 function confirmRevokeExchange(requestId){showModal(`<h2>停止本次联系方式共享？</h2><p>停止后双方将无法再从平台查看本次号码，但无法撤回对方已看到、截图或保存的信息。私信可以继续。</p><p id="exchange-feedback" role="alert"></p><div class="modal-actions"><button class="button secondary" data-action="close-modal">保留共享</button><button class="button primary" data-action="exchange-confirm-revoke" data-request-id="${esc(requestId)}">停止共享</button></div>`,'停止联系方式共享');}
 
@@ -264,8 +271,14 @@ function productCardMarkup(card){
   const image=imageUrl(card?.imageUrl)||productImage(product||{});
   return `<a class="chat-product-card" href="#/product/${encodeURIComponent(id)}">${image?`<img src="${esc(image)}" alt="" loading="lazy">`:'<span class="chat-product-placeholder">🍊</span>'}<span class="chat-product-info"><small>商品卡片</small><strong>${esc(title)}</strong>${Number.isFinite(Number(price))&&price!==undefined?`<span class="chat-product-price">¥${money(price)}</span>`:''}</span>${icon('chevron')}</a>`;
 }
+function contactExchangeCardMarkup(m){
+  const exchange=m.exchange||{},status=exchange.status;
+  const title=status==='pending'?(m.mine?'已发送联系方式交换申请':'对方申请交换联系方式'):({accepted:'双方已同意交换',declined:'申请已被婉拒',cancelled:'申请已撤回',revoked:'联系方式共享已停止',expired:'申请已过期'}[status]||'联系方式交换申请');
+  const offered=['wechat','qq','phone'].includes(exchange.offeredType)?` · ${contactLabel(exchange.offeredType)}`:'';
+  return `<div class="chat-exchange-card"><small>联系卡片 · ${m.mine?'我发起':'对方发起'}</small><strong>${title}</strong><p>申请交换本次选择的联系方式${offered}。对方同意前不会显示具体号码。</p><button type="button" data-action="open-exchange-card">${status==='pending'&&!m.mine?'查看并处理申请':'查看交换状态'}</button></div>`;
+}
 function chatMessageMarkup(m){
-  const content=m.kind==='product_card'?productCardMarkup(m.card):`<span>${esc(m.body).replace(/\n/g,'<br>')}</span>`;
+  const content=m.kind==='product_card'?productCardMarkup(m.card):m.kind==='contact_exchange'?contactExchangeCardMarkup(m):`<span>${esc(m.body).replace(/\n/g,'<br>')}</span>`;
   return `<div class="chat-message ${m.mine?'mine':''}">${content}<time>${new Date(m.createdAt).toLocaleString()}</time></div>`;
 }
 function productCardPrompt(){
@@ -405,7 +418,8 @@ if(event.target.closest('.skip-link')){event.preventDefault();$('#main-content')
 const button=event.target.closest('[data-action]');if(!button){if(event.target.classList.contains('modal-backdrop'))closeModal();return;}const{action,id}=button.dataset;
 if((submitting||uploading||signingOut||profileSaving||settingsSaving||state.emailLogin.verifying)&&!['close-modal'].includes(action)){event.preventDefault();toast('正在保存或确认登录状态，请稍等一下。');return;}
 if(action==='retry-messages'){loadConversations();return;}if(action==='retry-session'){refreshSession();return;}if(action==='retry-route'){loadRoute();return;}if(action==='retry-home'){loadHome();return;}if(action==='close-modal'){closeModal();return;}
-if(action==='toggle-exchange'){state.exchangeOpen=!state.exchangeOpen;const panel=$('#contact-exchange-panel');if(panel)panel.hidden=!state.exchangeOpen;button.setAttribute('aria-expanded',String(state.exchangeOpen));return;}
+if(action==='toggle-exchange'){if(!state.activeConversation?.isPreviewDemo&&exchangeCanRequest()){openContactExchange('request');return;}state.exchangeOpen=!state.exchangeOpen;const panel=$('#contact-exchange-panel');if(panel)panel.hidden=!state.exchangeOpen;button.setAttribute('aria-expanded',String(state.exchangeOpen));return;}
+if(action==='open-exchange-card'){state.exchangeOpen=true;const panel=$('#contact-exchange-panel');if(panel){panel.hidden=false;panel.scrollIntoView?.({behavior:'smooth',block:'nearest'});}document.querySelector('[data-action="toggle-exchange"]')?.setAttribute('aria-expanded','true');return;}
 if(action==='send-greeting'){sendGreeting();return;}if(action==='send-product-card'){sendProductCard();return;}
 if(action==='dismiss-product-card'){state.dismissedProductCardId=state.activeConversation?.id;$('#product-card-prompt')?.remove();return;}
 if(action==='exchange-request'){openContactExchange('request');return;}if(action==='exchange-accept'){openContactExchange('accept');return;}
@@ -430,7 +444,7 @@ if(action==='about'){showModal(`<span class="modal-emoji">🍊</span><h2>欢迎�
 if(action==='privacy')showModal(`<span class="modal-emoji">🌿</span><h2>分享好物，照顾隐私</h2><p>商品或服务的标题、介绍、校区、地点、公开昵称和图片可被所有访客查看。请勿在照片或描述中放入证件、住址等敏感信息。</p><p>无需填写微信、QQ 或手机号也能私信。任一方可在私信中申请交换，只有双方明确同意后才互相显示本次选择的信息；也可拒绝、撤回或停止共享。对方可能保存信息，停止共享无法撤回已被看到的内容。</p><p>你的学校邮箱不会自动成为公开昵称；仅你自己可看到遮罩后的邮箱。发布、收藏与上传图片由网站云端保存；草稿在提交前仅保留于当前页面，刷新后不会恢复。</p><p>联系对方：在详情选择“发消息”，无需交换联系方式。商品下架不等于清除历史私信或已同意的交换；停止联系方式共享请在对应私信中操作。</p><button class="button primary" data-action="close-modal">我知道了 ${icon('check')}</button>`,'隐私与联系');
 });
 document.addEventListener('submit',event=>{if(event.target.id==='exchange-form'){event.preventDefault();submitContactExchange(event.target);}});
-document.addEventListener('change',event=>{if(event.target.id==='exchange-type'){const input=$('#exchange-value');if(input){input.value='';input.placeholder=event.target.value==='phone'?'11 位中国大陆手机号':event.target.value==='qq'?'5–12 位 QQ 号':'本次愿意分享的微信号';}const consent=$('#exchange-consent');if(consent)consent.checked=false;}});
+document.addEventListener('change',event=>{if(event.target.id==='exchange-type'){const input=$('#exchange-value');if(input){input.value=state.session?.user?.[event.target.value]||'';input.placeholder=event.target.value==='phone'?'11 位中国大陆手机号':event.target.value==='qq'?'5–12 位 QQ 号':'本次愿意分享的微信号';}const consent=$('#exchange-consent');if(consent)consent.checked=false;}});
 document.addEventListener('keydown',event=>{const modal=$('.modal');if(!modal)return;if(event.key==='Escape'){closeModal();return;}if(event.key!=='Tab')return;const focusable=[...modal.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select,textarea,[tabindex="0"]')],first=focusable[0],last=focusable.at(-1);if(!first){event.preventDefault();return;}if(event.shiftKey&&(document.activeElement===first||document.activeElement===modal)){event.preventDefault();last.focus();}else if(!event.shiftKey&&(document.activeElement===last||document.activeElement===modal)){event.preventDefault();first.focus();}});
 window.addEventListener('hashchange',()=>{if(submitting||uploading||signingOut||profileSaving||state.emailLogin.verifying){history.replaceState(null,'',currentRoute||'#/');toast('正在保存或处理照片，请稍等一下。');return;}captureDraft();loadRoute();});
 window.addEventListener('beforeunload',event=>{if(submitting||uploading||hasUnsavedDraft()){event.preventDefault();event.returnValue='';}});
